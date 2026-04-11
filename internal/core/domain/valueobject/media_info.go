@@ -1,6 +1,6 @@
 package valueobject
 
-import "subsync/subsync/internal/core/domain/exception"
+import "subsync/internal/core/domain/exception"
 
 type MediaType string
 
