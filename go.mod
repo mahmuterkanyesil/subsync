@@ -1,3 +1,3 @@
-module github.com/mahmuterkanyesil/subsync
+module subsync
 
 go 1.26.2
