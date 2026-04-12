@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"subsync/internal/core/domain/exception"
 	"time"
+	"unicode"
 )
 
 type WatchDir struct {
@@ -24,12 +25,26 @@ func NewWatchDir(path string) (*WatchDir, error) {
 	// Normalize separators and clean the path
 	p := filepath.Clean(filepath.FromSlash(path))
 
-	// Require absolute path to avoid ambiguous relative entries
-	if !filepath.IsAbs(p) {
+	// Require absolute path to avoid ambiguous relative entries.
+	// Accept Windows drive-letter paths (e.g. C:\...) even when running on non-Windows hosts.
+	isAbs := filepath.IsAbs(p)
+	if !isAbs {
+		// detect Windows drive-letter absolute paths like C:\Users\...
+		if len(p) >= 2 && p[1] == ':' {
+			r := rune(p[0])
+			if unicode.IsLetter(r) {
+				isAbs = true
+			}
+		}
+	}
+	if !isAbs {
 		return nil, &exception.InvalidSubtitleException{Message: "watch directory path must be absolute"}
 	}
 
-	// Optional: check that path exists and is a directory
+	// Check existence only if the path actually exists in the running environment.
+	// If it doesn't exist (common when adding host Windows paths from a Linux container),
+	// accept the entry but don't error — this lets users add host paths that aren't visible
+	// to the running process.
 	if fi, err := os.Stat(p); err == nil {
 		if !fi.IsDir() {
 			return nil, &exception.InvalidSubtitleException{Message: "watch directory path is not a directory"}
