@@ -14,7 +14,8 @@ type AsynqTaskQueue struct {
 }
 
 func NewAsynqTaskQueue(redisURL string) *AsynqTaskQueue {
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisURL})
+	opt := parseRedisURL(redisURL)
+	client := asynq.NewClient(opt)
 	return &AsynqTaskQueue{client: client}
 }
 

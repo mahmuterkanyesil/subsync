@@ -15,8 +15,9 @@ type AsynqWorkerServer struct {
 }
 
 func NewAsynqWorkerServer(redisURL string, concurrency int, translationUseCase port.TranslationUseCase) *AsynqWorkerServer {
+	opt := parseRedisURL(redisURL)
 	server := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: redisURL},
+		opt,
 		asynq.Config{Concurrency: concurrency},
 	)
 	return &AsynqWorkerServer{
