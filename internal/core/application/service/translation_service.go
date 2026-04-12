@@ -86,19 +86,38 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue())
 		if err != nil {
-			if strings.Contains(err.Error(), "quota_exhausted") {
+			errStr := err.Error()
+			switch {
+			case strings.Contains(errStr, "quota_exhausted_rpm"):
+				// Transient: sleep 60s, keep progress, retry SAME key (do NOT increment i)
+				_ = s.progress.Save(ctx, engPath, translated)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(60 * time.Second):
+				}
+				continue // i stays the same, same key
+
+			case strings.Contains(errStr, "quota_exhausted_rpd"),
+				strings.Contains(errStr, "quota_exhausted"):
+				// Daily quota: mark key exhausted, delete stale .tr.srt, rotate
 				apiKey.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour))
 				_ = s.apiKeyRepo.Save(ctx, apiKey)
-
+				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
+				_ = os.Remove(trPath)
 				retryCount++
 				if retryCount >= maxRetry {
 					_ = s.progress.Save(ctx, engPath, translated)
+					_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
+					_ = s.subtitleRepo.Save(ctx, subtitle)
 					return fmt.Errorf("all api keys quota exhausted")
 				}
-				continue // i artmaz, aynı batch tekrar dener
+				continue // try next key
+
+			default:
+				_ = s.progress.Save(ctx, engPath, translated)
+				return err
 			}
-			_ = s.progress.Save(ctx, engPath, translated)
-			return err
 		}
 
 		retryCount = 0

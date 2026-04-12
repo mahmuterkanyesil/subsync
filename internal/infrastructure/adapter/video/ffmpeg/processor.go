@@ -2,17 +2,47 @@ package ffmpeg
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
+
+var (
+	ErrVideoNotFound  = errors.New("video_not_found")
+	ErrFFmpegNotFound = errors.New("ffmpeg_not_found")
+	ErrEngSrtTooLarge = errors.New("eng_too_large")
+	ErrTrSrtNotFound  = errors.New("tr_srt_not_found")
+	ErrFFmpegFailed   = errors.New("ffmpeg_failed")
+	ErrOutputTooSmall = errors.New("output_too_small")
+	ErrNoEngStream    = errors.New("no suitable english subtitle stream found")
+)
+
+var engSrtRegex = regexp.MustCompile(`(?i)\.en[^a-z]|\.eng[^a-z]`)
+
+type ffprobeOutput struct {
+	Streams []struct {
+		Index int `json:"index"`
+		Tags  struct {
+			Language string `json:"language"`
+			Title    string `json:"title"`
+		} `json:"tags"`
+	} `json:"streams"`
+}
 
 type FFmpegProcessor struct{}
 
 func NewFFmpegProcessor() *FFmpegProcessor {
 	return &FFmpegProcessor{}
+}
+
+func isSizeValid(path string, minBytes int64) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Size() >= minBytes
 }
 
 func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath string) (bool, error) {
@@ -33,25 +63,43 @@ func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath stri
 }
 
 func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath string) (string, error) {
-	// 1. .eng.srt dosyası var mı?
 	base := strings.TrimSuffix(videoPath, filepath.Ext(videoPath))
+
+	// Step 1: Check hardcoded candidates
 	candidates := []string{
 		base + ".eng.srt",
 		base + ".en.srt",
 		base + ".english.srt",
 	}
-
 	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c, nil
+		if info, err := os.Stat(c); err == nil {
+			if info.Size() >= 10*1024 {
+				return c, nil
+			}
+			// Too small — delete and re-extract
+			_ = os.Remove(c)
 		}
 	}
 
-	// 2. Video container'dan çıkar
+	// Step 2: Regex scan directory for any *.srt matching English pattern
+	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(videoPath), "*.srt"))
+	for _, m := range matches {
+		if engSrtRegex.MatchString(filepath.Base(m)) && isSizeValid(m, 10*1024) {
+			return m, nil
+		}
+	}
+
+	// Step 3: Use ffprobe to find the right subtitle stream
+	streamIndex, err := f.findEngSubtitleStream(ctx, videoPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Step 4: Extract the stream
 	engPath := base + ".eng.srt"
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-i", videoPath,
-		"-map", "0:s:0",
+		"-map", fmt.Sprintf("0:s:%d", streamIndex),
 		"-c:s", "srt",
 		engPath,
 		"-y",
@@ -60,10 +108,81 @@ func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath strin
 		return "", fmt.Errorf("subtitle extraction failed: %w", err)
 	}
 
+	// Validate size
+	if !isSizeValid(engPath, 10*1024) {
+		_ = os.Remove(engPath)
+		return "", fmt.Errorf("extracted subtitle too small (< 10KB)")
+	}
+
 	return engPath, nil
 }
 
+func (f *FFmpegProcessor) findEngSubtitleStream(ctx context.Context, videoPath string) (int, error) {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_streams",
+		"-select_streams", "s",
+		videoPath,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe failed: %w", err)
+	}
+
+	var probe ffprobeOutput
+	if err := json.Unmarshal(out, &probe); err != nil {
+		return 0, fmt.Errorf("ffprobe parse failed: %w", err)
+	}
+
+	skipTitles := []string{"forced", "signs", "songs", "sdh"}
+
+	for i, s := range probe.Streams {
+		lang := strings.ToLower(s.Tags.Language)
+		title := strings.ToLower(s.Tags.Title)
+
+		if lang != "eng" && lang != "en" {
+			continue
+		}
+
+		skip := false
+		for _, bad := range skipTitles {
+			if strings.Contains(title, bad) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		return i, nil
+	}
+
+	// Fall back to stream 0 if no language-tagged English stream found
+	if len(probe.Streams) > 0 {
+		return 0, nil
+	}
+
+	return 0, ErrNoEngStream
+}
+
 func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, srtPath string) error {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		return ErrFFmpegNotFound
+	}
+	if _, err := os.Stat(videoPath); err != nil {
+		return ErrVideoNotFound
+	}
+	if _, err := os.Stat(srtPath); err != nil {
+		return ErrTrSrtNotFound
+	}
+
+	origInfo, err := os.Stat(videoPath)
+	if err != nil {
+		return ErrVideoNotFound
+	}
+
 	ext := strings.ToLower(filepath.Ext(videoPath))
 	tmpPath := videoPath + ".tmp" + ext
 
@@ -100,9 +219,14 @@ func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, s
 
 	if err := cmd.Run(); err != nil {
 		_ = os.Remove(tmpPath)
-		return fmt.Errorf("ffmpeg failed: %w", err)
+		return fmt.Errorf("%w: %v", ErrFFmpegFailed, err)
 	}
 
-	// Atomic replace
+	tmpInfo, err := os.Stat(tmpPath)
+	if err != nil || tmpInfo.Size() < origInfo.Size()*9/10 {
+		_ = os.Remove(tmpPath)
+		return ErrOutputTooSmall
+	}
+
 	return os.Rename(tmpPath, videoPath)
 }

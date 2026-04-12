@@ -8,6 +8,8 @@ import (
 func IsTurkish(blocks []port.SRTBlock) bool {
 	turkishChars := []string{"ğ", "ı", "ş", "ç", "ö", "ü", "Ğ", "İ", "Ş"}
 	englishMarkers := []string{" the ", " and ", " is ", " are ", " was "}
+	frenchMarkers := []string{" le ", " la ", " les ", " est ", " sont "}
+	spanishMarkers := []string{" el ", " los ", " es ", " son "}
 
 	sample := ""
 	for i, b := range blocks {
@@ -15,11 +17,32 @@ func IsTurkish(blocks []port.SRTBlock) bool {
 			sample += b.Text + " "
 		}
 	}
-	sample = strings.ToLower(sample)
+	sampleLower := strings.ToLower(sample)
 
 	for _, m := range englishMarkers {
-		if strings.Contains(sample, m) {
+		if strings.Contains(sampleLower, m) {
 			return false
+		}
+	}
+	for _, m := range frenchMarkers {
+		if strings.Contains(sampleLower, m) {
+			return false
+		}
+	}
+	for _, m := range spanishMarkers {
+		if strings.Contains(sampleLower, m) {
+			return false
+		}
+	}
+
+	for _, r := range sample {
+		switch {
+		case r >= '\u0400' && r <= '\u04FF':
+			return false // Cyrillic
+		case r >= '\u0600' && r <= '\u06FF':
+			return false // Arabic
+		case r >= '\u4E00' && r <= '\u9FFF':
+			return false // CJK
 		}
 	}
 

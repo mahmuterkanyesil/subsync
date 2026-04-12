@@ -76,3 +76,19 @@ func (s *Subtitle) MarkError(err error) {
 func (s *Subtitle) MediaInfo() valueobject.MediaInfo {
 	return s.mediaInfo
 }
+
+func RestoreSubtitle(mediaInfo valueobject.MediaInfo, engPath string, status valueobject.SubtitleStatus,
+	lastError string, embedded bool, createdAt, updatedAt time.Time) (*Subtitle, error) {
+	if engPath == "" {
+		return nil, &exception.InvalidSubtitleException{Message: "engPath cannot be empty"}
+	}
+	return &Subtitle{
+		mediaInfo: mediaInfo,
+		status:    status,
+		engPath:   engPath,
+		lastError: lastError,
+		embedded:  embedded,
+		createdAt: createdAt,
+		updatedAt: updatedAt,
+	}, nil
+}

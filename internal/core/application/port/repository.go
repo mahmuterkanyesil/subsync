@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"subsync/internal/core/domain/entity"
+	"subsync/internal/core/domain/valueobject"
 )
 
 type SubtitleStats struct {
@@ -12,6 +13,7 @@ type SubtitleStats struct {
 	Error          int
 	QuotaExhausted int
 	Embedded       int
+	EmbedFailed    int
 }
 
 type SubtitleRepository interface {
@@ -20,6 +22,8 @@ type SubtitleRepository interface {
 	FindAll(ctx context.Context) ([]*entity.Subtitle, error)
 	FindPendingEmbed(ctx context.Context) ([]*entity.Subtitle, error)
 	Statistics(ctx context.Context) (SubtitleStats, error)
+	FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error)
+	FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 }
 
 type APIKeyRepository interface {

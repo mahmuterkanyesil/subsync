@@ -8,14 +8,16 @@ const (
 	StatusError          SubtitleStatus = "error"
 	StatusQuotaExhausted SubtitleStatus = "quota_exhausted"
 	StatusEmbedded       SubtitleStatus = "embedded"
+	StatusEmbedFailed    SubtitleStatus = "embed_failed"
 )
 
 var validTransitions = map[SubtitleStatus][]SubtitleStatus{
 	StatusQueued:         {StatusDone, StatusError, StatusQuotaExhausted},
-	StatusDone:           {StatusEmbedded, StatusQueued},
+	StatusDone:           {StatusEmbedded, StatusQueued, StatusEmbedFailed},
 	StatusError:          {StatusQueued},
 	StatusQuotaExhausted: {StatusQueued},
 	StatusEmbedded:       {},
+	StatusEmbedFailed:    {},
 }
 
 func (s SubtitleStatus) CanTransitionTo(next SubtitleStatus) bool {

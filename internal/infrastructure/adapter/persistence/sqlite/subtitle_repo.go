@@ -73,6 +73,33 @@ func (r *SQLiteSubtitleRepository) FindPendingEmbed(ctx context.Context) ([]*ent
 	return scanSubtitles(rows)
 }
 
+func (r *SQLiteSubtitleRepository) FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error) {
+	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
+		FROM subtitles
+		WHERE season_number = ? AND episode_number = ? AND season_number > 0 AND episode_number > 0`
+
+	rows, err := r.db.QueryContext(ctx, query, season, episode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanSubtitles(rows)
+}
+
+func (r *SQLiteSubtitleRepository) FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
+	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
+		FROM subtitles WHERE status = ?`
+
+	rows, err := r.db.QueryContext(ctx, query, string(status))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanSubtitles(rows)
+}
+
 func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.SubtitleStats, error) {
 	query := `SELECT status, COUNT(*) FROM subtitles GROUP BY status`
 
@@ -100,6 +127,8 @@ func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.Subtitl
 			stats.QuotaExhausted = count
 		case "embedded":
 			stats.Embedded = count
+		case "embed_failed":
+			stats.EmbedFailed = count
 		}
 		stats.Total += count
 	}
@@ -120,12 +149,7 @@ func scanSubtitle(row *sql.Row) (*entity.Subtitle, error) {
 	}
 
 	mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-	subtitle, err := entity.NewSubtitle(mediaInfo, engPath)
-	if err != nil {
-		return nil, err
-	}
-	_ = subtitle.TransitionTo(valueobject.SubtitleStatus(status))
-	return subtitle, nil
+	return entity.RestoreSubtitle(mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
 }
 
 func scanSubtitles(rows *sql.Rows) ([]*entity.Subtitle, error) {
@@ -142,11 +166,10 @@ func scanSubtitles(rows *sql.Rows) ([]*entity.Subtitle, error) {
 		}
 
 		mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-		subtitle, err := entity.NewSubtitle(mediaInfo, engPath)
+		subtitle, err := entity.RestoreSubtitle(mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
 		if err != nil {
 			continue
 		}
-		_ = subtitle.TransitionTo(valueobject.SubtitleStatus(status))
 		result = append(result, subtitle)
 	}
 	return result, nil
