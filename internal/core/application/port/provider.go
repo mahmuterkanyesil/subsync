@@ -9,7 +9,7 @@ type SRTBlock struct {
 }
 
 type TranslationProvider interface {
-	Translate(blocks []SRTBlock, key string)
+	TranslateBatch(ctx context.Context, blocks []SRTBlock, key string) ([]SRTBlock, error)
 }
 
 type VideoProcessor interface {
