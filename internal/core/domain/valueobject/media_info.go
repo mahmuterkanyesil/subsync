@@ -2,13 +2,6 @@ package valueobject
 
 import "subsync/internal/core/domain/exception"
 
-type MediaType string
-
-const (
-	MediaTypeSeries MediaType = "series"
-	MediaTypeMovie  MediaType = "movie"
-)
-
 type MediaInfo struct {
 	MediaType     MediaType
 	SeriesName    string
@@ -17,7 +10,23 @@ type MediaInfo struct {
 }
 
 func NewMediaInfo(mediaType MediaType, seriesName string, seasonNumber int, episodeNumber int) (MediaInfo, error) {
-	if mediaType != MediaTypeSeries && mediaType != MediaTypeMovie {
+	if !mediaType.IsValid() {
+		return MediaInfo{}, &exception.InvalidMediaTypeException{Message: "invalid media type"}
+	}
+	if seriesName == "" && mediaType == MediaTypeSeries {
+		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "series name cannot be empty"}
+	}
+	if seasonNumber < 0 {
 		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "invalid media type"}
 	}
+	if episodeNumber < 0 {
+		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "series name cannot be empty"}
+
+	}
+	return MediaInfo{
+		MediaType:     mediaType,
+		SeriesName:    seriesName,
+		SeasonNumber:  seasonNumber,
+		EpisodeNumber: episodeNumber,
+	}, nil
 }
