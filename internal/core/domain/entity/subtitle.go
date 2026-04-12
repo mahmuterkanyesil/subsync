@@ -1,4 +1,4 @@
-package entitiy
+package entity
 
 import (
 	"subsync/internal/core/domain/exception"
