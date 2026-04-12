@@ -72,3 +72,7 @@ func (s *Subtitle) MarkError(err error) {
 	s.lastError = err.Error()
 	s.updatedAt = time.Now()
 }
+
+func (s *Subtitle) MediaInfo() valueobject.MediaInfo {
+	return s.mediaInfo
+}
