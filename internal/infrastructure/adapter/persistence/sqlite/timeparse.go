@@ -13,9 +13,14 @@ func parseTime(ns sql.NullString) time.Time {
     }
     layouts := []string{
         time.RFC3339,
+        time.RFC3339Nano,
         "2006-01-02 15:04:05",
+        "2006-01-02 15:04:05.999999",
+        "2006-01-02 15:04:05.999999999",
         "2006-01-02 15:04",
         "2006-01-02T15:04:05Z",
+        "2006-01-02T15:04:05.999999Z",
+        "2006-01-02T15:04:05.999999999Z",
     }
     for _, l := range layouts {
         if t, err := time.Parse(l, ns.String); err == nil {
