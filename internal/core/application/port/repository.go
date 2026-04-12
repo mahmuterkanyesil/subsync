@@ -31,4 +31,6 @@ type APIKeyRepository interface {
 	FindByID(ctx context.Context, id int) (*entity.APIKey, error)
 	FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error)
 	ResetExpiredQuotas(ctx context.Context) error
+	FindAll(ctx context.Context) ([]*entity.APIKey, error)
+	Delete(ctx context.Context, id int) error
 }

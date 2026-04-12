@@ -1,0 +1,82 @@
+{{define "title"}}API Keys — Subsync{{end}}
+{{define "content"}}
+<h1>API Keys</h1>
+
+{{if .Flash}}
+<div class="flash {{if .FlashOK}}flash-ok{{else}}flash-err{{end}}">{{.Flash}}</div>
+{{end}}
+
+<div class="card">
+  <h2>Add New Key</h2>
+  <form method="POST" action="/keys" class="form-inline">
+    <input type="text" name="service" placeholder="Service (e.g. gemini)" required style="width:180px">
+    <input type="password" name="key_value" placeholder="Key value" required style="width:320px">
+    <button type="submit" class="btn btn-primary">Add Key</button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Service</th>
+          <th>Status</th>
+          <th>Quota</th>
+          <th>Requests</th>
+          <th>Last Used</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Keys}}
+        <tr>
+          <td>{{.ID}}</td>
+          <td>{{.Service}}</td>
+          <td>
+            {{if .IsActive}}
+              <span class="badge badge-active">Active</span>
+            {{else}}
+              <span class="badge badge-disabled">Disabled</span>
+            {{end}}
+          </td>
+          <td>
+            {{if .IsQuotaExceeded}}
+              <span class="badge badge-exceeded">Exceeded</span>
+              {{if .QuotaResetTime}}<br><small style="color:#6b7280">resets {{.QuotaResetTime}}</small>{{end}}
+            {{else}}
+              <span class="badge badge-ok">OK</span>
+            {{end}}
+          </td>
+          <td>{{.RequestMade}}</td>
+          <td>{{if .LastUsedAt}}{{.LastUsedAt}}{{else}}<span style="color:#9ca3af">—</span>{{end}}</td>
+          <td>{{.CreatedAt}}</td>
+          <td style="white-space:nowrap">
+            {{if .IsActive}}
+            <form method="POST" action="/keys/{{.ID}}/disable" style="display:inline">
+              <button type="submit" class="btn btn-secondary btn-sm">Disable</button>
+            </form>
+            {{else}}
+            <form method="POST" action="/keys/{{.ID}}/activate" style="display:inline">
+              <button type="submit" class="btn btn-success btn-sm">Enable</button>
+            </form>
+            {{end}}
+            <form method="POST" action="/keys/{{.ID}}/reset-quota" style="display:inline">
+              <button type="submit" class="btn btn-warning btn-sm">Reset Quota</button>
+            </form>
+            <form method="POST" action="/keys/{{.ID}}/delete" style="display:inline"
+                  onsubmit="return confirm('Delete this key?')">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="8" style="text-align:center;color:#6b7280;padding:2rem;">No API keys configured.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

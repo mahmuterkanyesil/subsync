@@ -64,6 +64,45 @@ func (r *SQLiteAPIKeyRepository) ResetExpiredQuotas(ctx context.Context) error {
 	return err
 }
 
+func (r *SQLiteAPIKeyRepository) FindAll(ctx context.Context) ([]*entity.APIKey, error) {
+	query := `SELECT id, service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys ORDER BY id ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var keys []*entity.APIKey
+	for rows.Next() {
+		k, err := scanAPIKeyFromRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, rows.Err()
+}
+
+func (r *SQLiteAPIKeyRepository) Delete(ctx context.Context, id int) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM api_keys WHERE id = ?`, id)
+	return err
+}
+
+func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
+	var id, requestMade int
+	var service, keyValue, lastError string
+	var isActive, isQuotaExceeded bool
+	var quotaResetTime *time.Time
+	var lastUsedAt *time.Time
+	var createdAt, updatedAt time.Time
+
+	err := rows.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTime, &requestMade, &lastUsedAt, &lastError, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, err
+	}
+
+	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, quotaResetTime, requestMade, lastUsedAt, lastError, createdAt, updatedAt)
+}
+
 func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 	var id, requestMade int
 	var service, keyValue, lastError string

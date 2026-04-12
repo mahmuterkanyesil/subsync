@@ -1,0 +1,57 @@
+{{define "title"}}Records — Subsync{{end}}
+{{define "content"}}
+<h1>Records</h1>
+
+<div class="filter-bar">
+  <a href="/records" {{if eq .Filter ""}}class="active"{{end}}>All</a>
+  <a href="/records?status=queued"          {{if eq .Filter "queued"}}class="active"{{end}}>Queued</a>
+  <a href="/records?status=done"            {{if eq .Filter "done"}}class="active"{{end}}>Done</a>
+  <a href="/records?status=embedded"        {{if eq .Filter "embedded"}}class="active"{{end}}>Embedded</a>
+  <a href="/records?status=error"           {{if eq .Filter "error"}}class="active"{{end}}>Error</a>
+  <a href="/records?status=quota_exhausted" {{if eq .Filter "quota_exhausted"}}class="active"{{end}}>Quota Exhausted</a>
+  <a href="/records?status=embed_failed"    {{if eq .Filter "embed_failed"}}class="active"{{end}}>Embed Failed</a>
+</div>
+
+<div class="card">
+  <div class="record-count">{{.Total}} record{{if ne .Total 1}}s{{end}}</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Media Type</th>
+          <th>Updated</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Records}}
+        <tr>
+          <td class="path-cell" title="{{.EngPath}}">{{base .EngPath}}</td>
+          <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+          <td>{{.MediaType}}</td>
+          <td>{{.UpdatedAt}}</td>
+          <td>
+            {{if or (eq .Status "error") (eq .Status "quota_exhausted")}}
+            <form method="POST" action="/records/retry" style="display:inline">
+              <input type="hidden" name="eng_path" value="{{.EngPath}}">
+              <button type="submit" class="btn btn-warning btn-sm">Retry</button>
+            </form>
+            {{end}}
+            {{if or (eq .Status "embedded") (eq .Status "embed_failed") (eq .Status "done")}}
+            <form method="POST" action="/records/re-embed" style="display:inline">
+              <input type="hidden" name="eng_path" value="{{.EngPath}}">
+              <button type="submit" class="btn btn-primary btn-sm">Re-embed</button>
+            </form>
+            {{end}}
+          </td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5" style="text-align:center;color:#6b7280;padding:2rem;">No records found.</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}

@@ -67,3 +67,61 @@ func toStatsResponse(stats port.SubtitleStats) StatsResponse {
 		EmbedFailed:    stats.EmbedFailed,
 	}
 }
+
+type APIKeyResponse struct {
+	ID              int    `json:"id"`
+	Service         string `json:"service"`
+	IsActive        bool   `json:"is_active"`
+	IsQuotaExceeded bool   `json:"is_quota_exceeded"`
+	QuotaResetTime  string `json:"quota_reset_time,omitempty"`
+	RequestMade     int    `json:"request_made"`
+	LastUsedAt      string `json:"last_used_at,omitempty"`
+	LastError       string `json:"last_error,omitempty"`
+	CreatedAt       string `json:"created_at"`
+}
+
+func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
+	r := APIKeyResponse{
+		ID:              k.ID(),
+		Service:         k.Service(),
+		IsActive:        k.IsActive(),
+		IsQuotaExceeded: k.IsQuotaExceeded(),
+		RequestMade:     k.RequestMade(),
+		LastError:       k.LastError(),
+		CreatedAt:       k.CreatedAt().Format("2006-01-02 15:04"),
+	}
+	if k.QuotaResetTime() != nil {
+		r.QuotaResetTime = k.QuotaResetTime().Format("2006-01-02 15:04")
+	}
+	if k.LastUsedAt() != nil {
+		r.LastUsedAt = k.LastUsedAt().Format("2006-01-02 15:04")
+	}
+	return r
+}
+
+func toAPIKeyResponses(keys []*entity.APIKey) []APIKeyResponse {
+	result := make([]APIKeyResponse, len(keys))
+	for i, k := range keys {
+		result[i] = toAPIKeyResponse(k)
+	}
+	return result
+}
+
+type DashboardData struct {
+	CurrentPage string
+	Stats       StatsResponse
+}
+
+type RecordsData struct {
+	CurrentPage string
+	Records     []SubtitleResponse
+	Filter      string
+	Total       int
+}
+
+type KeysData struct {
+	CurrentPage string
+	Keys        []APIKeyResponse
+	Flash       string
+	FlashOK     bool
+}

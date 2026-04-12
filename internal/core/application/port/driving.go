@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"subsync/internal/core/domain/entity"
+	valueobject "subsync/internal/core/domain/valueobject"
 )
 
 type ScanningUseCase interface {
@@ -26,4 +27,8 @@ type StatsUseCase interface {
 	AddApiKey(ctx context.Context, service string, keyValue string) error
 	DisableApiKey(ctx context.Context, id int) error
 	ResetQuotaApiKey(ctx context.Context, id int) error
+	ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error)
+	DeleteAPIKey(ctx context.Context, id int) error
+	ActivateAPIKey(ctx context.Context, id int) error
+	ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 }

@@ -1,0 +1,34 @@
+{{define "title"}}Dashboard — Subsync{{end}}
+{{define "content"}}
+<h1>Dashboard</h1>
+<div class="stat-grid">
+  <a class="stat-card" href="/records">
+    <div class="label">Total</div>
+    <div class="value color-total">{{.Stats.Total}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=queued">
+    <div class="label">Queued</div>
+    <div class="value color-queued">{{.Stats.Queued}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=done">
+    <div class="label">Done</div>
+    <div class="value color-done">{{.Stats.Done}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=embedded">
+    <div class="label">Embedded</div>
+    <div class="value color-embedded">{{.Stats.Embedded}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=error">
+    <div class="label">Error</div>
+    <div class="value color-error">{{.Stats.Error}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=quota_exhausted">
+    <div class="label">Quota Exhausted</div>
+    <div class="value color-quota_exhausted">{{.Stats.QuotaExhausted}}</div>
+  </a>
+  <a class="stat-card" href="/records?status=embed_failed">
+    <div class="label">Embed Failed</div>
+    <div class="value color-embed_failed">{{.Stats.EmbedFailed}}</div>
+  </a>
+</div>
+{{end}}

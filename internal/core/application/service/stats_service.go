@@ -94,3 +94,24 @@ func (s *StatsService) ResetQuotaApiKey(ctx context.Context, id int) error {
 	key.ResetQuota()
 	return s.apiKeyRepo.Save(ctx, key)
 }
+
+func (s *StatsService) ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error) {
+	return s.apiKeyRepo.FindAll(ctx)
+}
+
+func (s *StatsService) DeleteAPIKey(ctx context.Context, id int) error {
+	return s.apiKeyRepo.Delete(ctx, id)
+}
+
+func (s *StatsService) ActivateAPIKey(ctx context.Context, id int) error {
+	key, err := s.apiKeyRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	key.Activate()
+	return s.apiKeyRepo.Save(ctx, key)
+}
+
+func (s *StatsService) ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
+	return s.subtitleRepo.FindByStatus(ctx, status)
+}
