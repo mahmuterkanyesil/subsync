@@ -129,6 +129,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		translated = append(translated, result...)
 		_ = s.progress.Save(ctx, engPath, translated)
 		i += s.batchSize
+
+		// Rate limit delay between batches
+		if i < len(remaining) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(10 * time.Second):
+			}
+		}
 	}
 
 	// Domain service ile doğrula

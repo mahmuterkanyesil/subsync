@@ -16,9 +16,9 @@ services:
       - WATCH_DIRS=/tv:/movies
       - SCAN_INTERVAL_SEC=30
     volumes:
-      - subsync_data:/data
-      - /home/mahmuterkanyesil/tv:/tv:ro
-      - /home/mahmuterkanyesil/movies:/movies:ro
+      - ${DATA_DIR:-./data}:/data
+      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
+      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
     depends_on:
       - redis
 
@@ -33,7 +33,7 @@ services:
       - BATCH_SIZE=500
       - WORKER_CONCURRENCY=2
     volumes:
-      - subsync_data:/data
+      - ${DATA_DIR:-./data}:/data
     depends_on:
       - redis
 
@@ -42,13 +42,12 @@ services:
     restart: unless-stopped
     command: ./bin/embedder
     environment:
-      - REDIS_URL=redis://redis:6379/0
       - STATE_DB_PATH=/data/state.db
       - EMBED_INTERVAL_SEC=600
     volumes:
-      - subsync_data:/data
-      - /home/mahmuterkanyesil/tv:/tv
-      - /home/mahmuterkanyesil/movies:/movies
+      - ${DATA_DIR:-./data}:/data
+      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv
+      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies
     depends_on:
       - redis
 
@@ -63,10 +62,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - subsync_data:/data
+      - ${DATA_DIR:-./data}:/data
     depends_on:
       - redis
 
 volumes:
   redis_data:
-  subsync_data:

@@ -100,7 +100,11 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 			existing, err := s.subtitleRepo.FindByPath(ctx, engPath)
 			if err == nil && existing != nil {
 				status := existing.Status()
-				if status == valueobject.StatusQueued || status == valueobject.StatusDone {
+				switch status {
+				case valueobject.StatusQueued,
+					valueobject.StatusDone,
+					valueobject.StatusEmbedded,
+					valueobject.StatusQuotaExhausted:
 					return nil
 				}
 			}

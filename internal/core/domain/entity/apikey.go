@@ -32,8 +32,40 @@ func NewAPIKey(service string, keyValue string) (*APIKey, error) {
 	return &APIKey{
 		service:   service,
 		keyValue:  keyValue,
+		isActive:  true,
 		createdAt: time.Now(),
 		updatedAt: time.Now(),
+	}, nil
+}
+
+func RestoreAPIKey(
+	id int,
+	service, keyValue string,
+	isActive, isQuotaExceeded bool,
+	quotaResetTime *time.Time,
+	requestMade int,
+	lastUsedAt *time.Time,
+	lastError string,
+	createdAt, updatedAt time.Time,
+) (*APIKey, error) {
+	if service == "" {
+		return nil, &exception.InvalidAPIKeyException{Message: "service cannot be empty"}
+	}
+	if keyValue == "" {
+		return nil, &exception.InvalidAPIKeyException{Message: "keyValue cannot be empty"}
+	}
+	return &APIKey{
+		id:              id,
+		service:         service,
+		keyValue:        keyValue,
+		isActive:        isActive,
+		isQuotaExceeded: isQuotaExceeded,
+		quotaResetTime:  quotaResetTime,
+		requestMade:     requestMade,
+		lastUsedAt:      lastUsedAt,
+		lastError:       lastError,
+		createdAt:       createdAt,
+		updatedAt:       updatedAt,
 	}, nil
 }
 

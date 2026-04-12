@@ -16,29 +16,19 @@ func NewSQLiteAPIKeyRepository(db *sql.DB) *SQLiteAPIKeyRepository {
 }
 
 func (r *SQLiteAPIKeyRepository) Save(ctx context.Context, k *entity.APIKey) error {
-	query := `
-		INSERT INTO api_keys (service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			is_active = excluded.is_active,
-			is_quota_exceeded = excluded.is_quota_exceeded,
-			quota_reset_time = excluded.quota_reset_time,
-			request_made = excluded.request_made,
-			last_used_at = excluded.last_used_at,
-			last_error = excluded.last_error,
-			updated_at = excluded.updated_at
-	`
+	now := time.Now()
+	if k.ID() == 0 {
+		query := `INSERT INTO api_keys (service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		_, err := r.db.ExecContext(ctx, query,
+			k.Service(), k.KeyValue(), k.IsActive(), k.IsQuotaExceeded(),
+			k.QuotaResetTime(), k.RequestMade(), k.LastUsedAt(), k.LastError(), now, now,
+		)
+		return err
+	}
+	query := `UPDATE api_keys SET is_active=?, is_quota_exceeded=?, quota_reset_time=?, request_made=?, last_used_at=?, last_error=?, updated_at=? WHERE id=?`
 	_, err := r.db.ExecContext(ctx, query,
-		k.Service(),
-		k.KeyValue(),
-		k.IsActive(),
-		k.IsQuotaExceeded(),
-		k.QuotaResetTime(),
-		k.RequestMade(),
-		k.LastUsedAt(),
-		k.LastError(),
-		k.CreatedAt(),
-		k.UpdatedAt(),
+		k.IsActive(), k.IsQuotaExceeded(), k.QuotaResetTime(),
+		k.RequestMade(), k.LastUsedAt(), k.LastError(), now, k.ID(),
 	)
 	return err
 }
@@ -51,6 +41,7 @@ func (r *SQLiteAPIKeyRepository) FindByID(ctx context.Context, id int) (*entity.
 }
 
 func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error) {
+	_ = r.ResetExpiredQuotas(ctx)
 	query := `
 		SELECT id, service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at
 		FROM api_keys
@@ -86,9 +77,5 @@ func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 		return nil, err
 	}
 
-	key, err := entity.NewAPIKey(service, keyValue)
-	if err != nil {
-		return nil, err
-	}
-	return key, nil
+	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, quotaResetTime, requestMade, lastUsedAt, lastError, createdAt, updatedAt)
 }

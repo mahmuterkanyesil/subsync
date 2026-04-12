@@ -145,6 +145,36 @@ func (f *FFmpegProcessor) findEngSubtitleStream(ctx context.Context, videoPath s
 	return 0, port.ErrNoEngStream
 }
 
+func (f *FFmpegProcessor) countSubtitleStreams(ctx context.Context, videoPath string) int {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "quiet",
+		"-print_format", "json",
+		"-show_streams",
+		"-select_streams", "s",
+		videoPath,
+	)
+	out, err := cmd.Output()
+	if err != nil {
+		return 0
+	}
+	var probe ffprobeOutput
+	if err := json.Unmarshal(out, &probe); err != nil {
+		return 0
+	}
+	return len(probe.Streams)
+}
+
+func (f *FFmpegProcessor) probeOK(ctx context.Context, path string) bool {
+	cmd := exec.CommandContext(ctx, "ffprobe",
+		"-v", "error",
+		"-show_entries", "format=duration",
+		"-of", "default=nw=1:nk=1",
+		path,
+	)
+	out, err := cmd.Output()
+	return err == nil && strings.TrimSpace(string(out)) != ""
+}
+
 func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, srtPath string) error {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return port.ErrFFmpegNotFound
@@ -166,12 +196,14 @@ func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, s
 
 	var cmd *exec.Cmd
 	if ext == ".mkv" {
+		existingSubs := f.countSubtitleStreams(ctx, videoPath)
+		newIndex := fmt.Sprintf("%d", existingSubs)
 		cmd = exec.CommandContext(ctx, "ffmpeg",
 			"-i", videoPath, "-i", srtPath,
 			"-map", "0", "-map", "1:0",
 			"-c:v", "copy", "-c:a", "copy", "-c:s", "copy",
-			"-metadata:s:s:0", "language=tur",
-			"-metadata:s:s:0", "title=Turkish (Subsync)",
+			"-metadata:s:s:"+newIndex, "language=tur",
+			"-metadata:s:s:"+newIndex, "title=Turkish (Subsync)",
 			tmpPath, "-y",
 		)
 	} else {
@@ -194,6 +226,11 @@ func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, s
 	if err != nil || tmpInfo.Size() < origInfo.Size()*9/10 {
 		_ = os.Remove(tmpPath)
 		return port.ErrOutputTooSmall
+	}
+
+	if !f.probeOK(ctx, tmpPath) {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("%w: container integrity check failed", port.ErrFFmpegFailed)
 	}
 
 	return os.Rename(tmpPath, videoPath)

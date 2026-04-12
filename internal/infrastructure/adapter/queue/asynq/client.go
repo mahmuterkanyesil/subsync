@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hibiken/asynq"
 )
@@ -24,6 +25,9 @@ func (q *AsynqTaskQueue) Enqueue(ctx context.Context, taskName string, payload a
 	}
 
 	task := asynq.NewTask(taskName, data)
-	_, err = q.client.EnqueueContext(ctx, task)
+	_, err = q.client.EnqueueContext(ctx, task,
+		asynq.MaxRetry(10),
+		asynq.Timeout(30*time.Minute),
+	)
 	return err
 }

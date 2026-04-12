@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"log"
 
@@ -17,7 +16,6 @@ import (
 
 func main() {
 	cfg := config.Load()
-	ctx := context.Background()
 
 	db, err := sql.Open("sqlite", cfg.StateDBPath)
 	if err != nil {
@@ -32,10 +30,7 @@ func main() {
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
 
-	translator, err := gemini.NewGeminiTranslator(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
+	translator := gemini.NewGeminiTranslator()
 
 	progressStore := progress.NewFileProgressStore(cfg.ProgressDir)
 

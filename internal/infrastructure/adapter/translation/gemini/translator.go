@@ -22,26 +22,19 @@ Türkçe noktalama kurallarına uy.`
 var htmlTagRe = regexp.MustCompile(`<[^>]+>`)
 
 type GeminiTranslator struct {
-	client    *genai.Client
 	modelName string
 	rpmLimit  int
 	rpdLimit  int
 	tpmLimit  int
 }
 
-func NewGeminiTranslator(ctx context.Context) (*GeminiTranslator, error) {
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{})
-	if err != nil {
-		return nil, err
-	}
-
+func NewGeminiTranslator() *GeminiTranslator {
 	return &GeminiTranslator{
-		client:    client,
 		modelName: "gemini-2.5-flash-lite",
 		rpmLimit:  10,
 		rpdLimit:  20,
 		tpmLimit:  250000,
-	}, nil
+	}
 }
 
 func stripTags(text string) (string, []string) {
@@ -62,6 +55,11 @@ func restoreTags(text string, tags []string) string {
 }
 
 func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue string) ([]port.SRTBlock, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: keyValue})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gemini client: %w", err)
+	}
+
 	// Strip HTML tags before sending, store per block
 	strippedBlocks := make([]port.SRTBlock, len(blocks))
 	blockTags := make([][]string, len(blocks))
@@ -81,9 +79,10 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 		sb.WriteString(fmt.Sprintf("<b id=\"%d\">\n%d\n%s\n%s\n</b>\n", b.Index, b.Index, b.Timestamp, b.Text))
 	}
 
-	model := g.client.Models
-	result, err := model.GenerateContent(ctx, g.modelName, genai.Text(sb.String()), &genai.GenerateContentConfig{
+	temperature := float32(0.3)
+	result, err := client.Models.GenerateContent(ctx, g.modelName, genai.Text(sb.String()), &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(systemInstruction, genai.RoleUser),
+		Temperature:       &temperature,
 	})
 	if err != nil {
 		return nil, g.handleError(err)
