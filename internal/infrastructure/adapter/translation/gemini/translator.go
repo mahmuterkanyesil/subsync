@@ -24,10 +24,8 @@ type GeminiTranslator struct {
 	tpmLimit  int
 }
 
-func NewGeminiTranslator(ctx context.Context, apiKey string) (*GeminiTranslator, error) {
-	client, err := genai.NewClient(ctx, &genai.ClientConfig{
-		APIKey: apiKey,
-	})
+func NewGeminiTranslator(ctx context.Context) (*GeminiTranslator, error) {
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{})
 	if err != nil {
 		return nil, err
 	}
