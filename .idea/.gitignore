@@ -10,4 +10,4 @@
 /dataSources.local.xml
 .idea/
 .env
-*.db
+state.db
