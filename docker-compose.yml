@@ -1,0 +1,72 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  agent:
+    build: .
+    restart: unless-stopped
+    command: ./bin/agent
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STATE_DB_PATH=/data/state.db
+      - PROGRESS_DIR=/data/progress
+      - WATCH_DIRS=/tv:/movies
+      - SCAN_INTERVAL_SEC=30
+    volumes:
+      - subsync_data:/data
+      - /home/mahmuterkanyesil/tv:/tv:ro
+      - /home/mahmuterkanyesil/movies:/movies:ro
+    depends_on:
+      - redis
+
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ./bin/worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STATE_DB_PATH=/data/state.db
+      - PROGRESS_DIR=/data/progress
+      - BATCH_SIZE=500
+      - WORKER_CONCURRENCY=2
+    volumes:
+      - subsync_data:/data
+    depends_on:
+      - redis
+
+  embedder:
+    build: .
+    restart: unless-stopped
+    command: ./bin/embedder
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - STATE_DB_PATH=/data/state.db
+      - EMBED_INTERVAL_SEC=600
+    volumes:
+      - subsync_data:/data
+      - /home/mahmuterkanyesil/tv:/tv
+      - /home/mahmuterkanyesil/movies:/movies
+    depends_on:
+      - redis
+
+  api:
+    build: .
+    restart: unless-stopped
+    command: ./bin/api
+    environment:
+      - STATE_DB_PATH=/data/state.db
+      - REDIS_URL=redis://redis:6379/0
+      - API_PORT=8080
+    ports:
+      - "8080:8080"
+    volumes:
+      - subsync_data:/data
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+  subsync_data:
