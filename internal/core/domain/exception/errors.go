@@ -25,6 +25,13 @@ func (e *InvalidMediaTypeException) Error() string {
 	return e.Message
 }
 
+type InvalidSubtitleException struct {
+	Message string
+}
+
+func (e *InvalidSubtitleException) Error() string {
+	return e.Message
+}
 type InvalidSubtitleStatusException struct {
 	Message string
 }
