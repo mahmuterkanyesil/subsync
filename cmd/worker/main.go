@@ -35,7 +35,13 @@ func main() {
 
 	progressStore := progress.NewFileProgressStore(cfg.ProgressDir)
 
-	translationService := service.NewTranslationService(subtitleRepo, apiKeyRepo, translator, progressStore)
+	translationService := service.NewTranslationService(
+		subtitleRepo,
+		apiKeyRepo,
+		translator,
+		progressStore,
+		cfg.BatchSize,
+	)
 
 	workerServer := asynq.NewAsynqWorkerServer(cfg.RedisURL, cfg.WorkerConcurrency, translationService)
 
