@@ -6,7 +6,6 @@ import (
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -136,16 +135,18 @@ func scanSubtitle(row *sql.Row) (*entity.Subtitle, error) {
 	var engPath, mediaType, seriesName, status, lastError string
 	var seasonNumber, episodeNumber int
 	var embedded bool
-	var createdAt, updatedAt time.Time
+	var createdAtStr, updatedAtStr sql.NullString
 
-	err := row.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt)
+	err := row.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAtStr, &updatedAtStr)
 	if err != nil {
 		return nil, err
 	}
 
 	id := parseOrNewUUID(idStr)
 	mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-	return entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
+	ca := parseTime(createdAtStr)
+	ua := parseTime(updatedAtStr)
+	return entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, ca, ua)
 }
 
 func scanSubtitles(rows *sql.Rows) ([]*entity.Subtitle, error) {
@@ -155,15 +156,17 @@ func scanSubtitles(rows *sql.Rows) ([]*entity.Subtitle, error) {
 		var engPath, mediaType, seriesName, status, lastError string
 		var seasonNumber, episodeNumber int
 		var embedded bool
-		var createdAt, updatedAt time.Time
+		var createdAtStr, updatedAtStr sql.NullString
 
-		if err := rows.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAtStr, &updatedAtStr); err != nil {
 			continue
 		}
 
 		id := parseOrNewUUID(idStr)
 		mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-		subtitle, err := entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
+		ca := parseTime(createdAtStr)
+		ua := parseTime(updatedAtStr)
+		subtitle, err := entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, ca, ua)
 		if err != nil {
 			continue
 		}

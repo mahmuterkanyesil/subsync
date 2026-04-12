@@ -91,30 +91,38 @@ func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
 	var id, requestMade int
 	var service, keyValue, lastError string
 	var isActive, isQuotaExceeded bool
-	var quotaResetTime *time.Time
-	var lastUsedAt *time.Time
-	var createdAt, updatedAt time.Time
+	var quotaResetTimeStr sql.NullString
+	var lastUsedAtStr sql.NullString
+	var createdAtStr, updatedAtStr sql.NullString
 
-	err := rows.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTime, &requestMade, &lastUsedAt, &lastError, &createdAt, &updatedAt)
+	err := rows.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
 	if err != nil {
 		return nil, err
 	}
 
-	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, quotaResetTime, requestMade, lastUsedAt, lastError, createdAt, updatedAt)
+	qrt := parseTimePtr(quotaResetTimeStr)
+	lsu := parseTimePtr(lastUsedAtStr)
+	ca := parseTime(createdAtStr)
+	ua := parseTime(updatedAtStr)
+	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, qrt, requestMade, lsu, lastError, ca, ua)
 }
 
 func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 	var id, requestMade int
 	var service, keyValue, lastError string
 	var isActive, isQuotaExceeded bool
-	var quotaResetTime *time.Time
-	var lastUsedAt *time.Time
-	var createdAt, updatedAt time.Time
+	var quotaResetTimeStr sql.NullString
+	var lastUsedAtStr sql.NullString
+	var createdAtStr, updatedAtStr sql.NullString
 
-	err := row.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTime, &requestMade, &lastUsedAt, &lastError, &createdAt, &updatedAt)
+	err := row.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
 	if err != nil {
 		return nil, err
 	}
 
-	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, quotaResetTime, requestMade, lastUsedAt, lastError, createdAt, updatedAt)
+	qrt := parseTimePtr(quotaResetTimeStr)
+	lsu := parseTimePtr(lastUsedAtStr)
+	ca := parseTime(createdAtStr)
+	ua := parseTime(updatedAtStr)
+	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, qrt, requestMade, lsu, lastError, ca, ua)
 }

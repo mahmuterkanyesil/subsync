@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"subsync/internal/core/domain/entity"
-	"time"
 )
 
 type SQLiteWatchDirRepository struct {
@@ -27,11 +26,12 @@ func (r *SQLiteWatchDirRepository) FindAll(ctx context.Context) ([]*entity.Watch
 		var id int
 		var path string
 		var enabled bool
-		var createdAt time.Time
-		if err := rows.Scan(&id, &path, &enabled, &createdAt); err != nil {
+		var createdAtStr sql.NullString
+		if err := rows.Scan(&id, &path, &enabled, &createdAtStr); err != nil {
 			return nil, err
 		}
-		dirs = append(dirs, entity.RestoreWatchDir(id, path, enabled, createdAt))
+		ca := parseTime(createdAtStr)
+		dirs = append(dirs, entity.RestoreWatchDir(id, path, enabled, ca))
 	}
 	return dirs, rows.Err()
 }
@@ -78,11 +78,11 @@ func (r *SQLiteWatchDirRepository) FindByID(ctx context.Context, id int) (*entit
 	var wdID int
 	var path string
 	var enabled bool
-	var createdAt time.Time
+	var createdAtStr sql.NullString
 	err := r.db.QueryRowContext(ctx, `SELECT id, path, enabled, created_at FROM watch_dirs WHERE id = ?`, id).
-		Scan(&wdID, &path, &enabled, &createdAt)
+		Scan(&wdID, &path, &enabled, &createdAtStr)
 	if err != nil {
 		return nil, err
 	}
-	return entity.RestoreWatchDir(wdID, path, enabled, createdAt), nil
+	return entity.RestoreWatchDir(wdID, path, enabled, parseTime(createdAtStr)), nil
 }
