@@ -1,12 +1,25 @@
 package port
 
-import "context"
+import (
+	"context"
+	"errors"
+	"subsync/internal/core/domain/valueobject"
+)
 
-type SRTBlock struct {
-	Index     int
-	Timestamp string
-	Text      string
-}
+// SRTBlock, altyazı blok işlemlerinde kullanılan port tipidir.
+// Domain'deki valueobject.SRTBlock'a type alias olarak tanımlanmıştır.
+type SRTBlock = valueobject.SRTBlock
+
+// Video işleme sentinel hataları — tüm katmanlar bu hataları kullanır.
+var (
+	ErrVideoNotFound  = errors.New("video_not_found")
+	ErrFFmpegNotFound = errors.New("ffmpeg_not_found")
+	ErrEngSrtTooLarge = errors.New("eng_too_large")
+	ErrTrSrtNotFound  = errors.New("tr_srt_not_found")
+	ErrFFmpegFailed   = errors.New("ffmpeg_failed")
+	ErrOutputTooSmall = errors.New("output_too_small")
+	ErrNoEngStream    = errors.New("no_suitable_english_stream")
+)
 
 type TranslationProvider interface {
 	TranslateBatch(ctx context.Context, blocks []SRTBlock, key string) ([]SRTBlock, error)

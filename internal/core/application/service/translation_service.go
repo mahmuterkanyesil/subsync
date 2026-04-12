@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"subsync/internal/core/application/port"
+	"subsync/internal/core/domain/event"
 	"subsync/internal/core/domain/valueobject"
+	domainservice "subsync/internal/core/domain/service"
 	"subsync/pkg/srt"
 	"time"
 )
@@ -17,6 +19,7 @@ type TranslationService struct {
 	apiKeyRepo   port.APIKeyRepository
 	translator   port.TranslationProvider
 	progress     port.ProgressStore
+	events       port.EventPublisher
 	batchSize    int
 }
 
@@ -25,6 +28,7 @@ func NewTranslationService(
 	apiKeyRepo port.APIKeyRepository,
 	translator port.TranslationProvider,
 	progress port.ProgressStore,
+	events port.EventPublisher,
 	batchSize int,
 ) *TranslationService {
 	return &TranslationService{
@@ -32,32 +36,34 @@ func NewTranslationService(
 		apiKeyRepo:   apiKeyRepo,
 		translator:   translator,
 		progress:     progress,
+		events:       events,
 		batchSize:    batchSize,
 	}
 }
 
+func (s *TranslationService) publish(e event.DomainEvent) {
+	if s.events != nil {
+		s.events.Publish(e)
+	}
+}
+
 func (s *TranslationService) Translate(ctx context.Context, engPath string) error {
-	// 1. Subtitle'ı DB'den getir
 	subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
 	if err != nil {
 		return err
 	}
 
-	// 2. Zaten done ise geç
 	if subtitle.Status() == valueobject.StatusDone {
 		return nil
 	}
 
-	// 3. İngilizce SRT dosyasını oku
 	content, err := os.ReadFile(engPath)
 	if err != nil {
 		return err
 	}
 
-	// 4. Bloklara böl
 	blocks := srt.Parse(string(content))
 
-	// 5. Önceki progress var mı?
 	translated, hasProgress, err := s.progress.Load(ctx, engPath)
 	if err != nil {
 		return err
@@ -66,7 +72,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		translated = []port.SRTBlock{}
 	}
 
-	// 6. Kalan blokları çevir — key rotation ile
 	remaining := blocks[len(translated):]
 	retryCount := 0
 	maxRetry := 3
@@ -89,18 +94,16 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			errStr := err.Error()
 			switch {
 			case strings.Contains(errStr, "quota_exhausted_rpm"):
-				// Transient: sleep 60s, keep progress, retry SAME key (do NOT increment i)
 				_ = s.progress.Save(ctx, engPath, translated)
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				case <-time.After(60 * time.Second):
 				}
-				continue // i stays the same, same key
+				continue
 
 			case strings.Contains(errStr, "quota_exhausted_rpd"),
 				strings.Contains(errStr, "quota_exhausted"):
-				// Daily quota: mark key exhausted, delete stale .tr.srt, rotate
 				apiKey.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour))
 				_ = s.apiKeyRepo.Save(ctx, apiKey)
 				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
@@ -112,7 +115,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 					_ = s.subtitleRepo.Save(ctx, subtitle)
 					return fmt.Errorf("all api keys quota exhausted")
 				}
-				continue // try next key
+				continue
 
 			default:
 				_ = s.progress.Save(ctx, engPath, translated)
@@ -123,31 +126,36 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		retryCount = 0
 		apiKey.MarkAsUsed()
 		_ = s.apiKeyRepo.Save(ctx, apiKey)
-
 		translated = append(translated, result...)
 		_ = s.progress.Save(ctx, engPath, translated)
 		i += s.batchSize
 	}
 
-	// 7. Validation
-	if !srt.IsTurkish(translated) {
+	// Domain service ile doğrula
+	texts := make([]string, len(translated))
+	for i, b := range translated {
+		texts[i] = b.Text
+	}
+	if !domainservice.IsTranslatedToTurkish(texts) {
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
 		return fmt.Errorf("translation validation failed: not turkish")
 	}
 
-	// 8. .tr.srt dosyasına yaz
 	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 	if err := os.WriteFile(trPath, []byte(srt.Format(translated)), 0644); err != nil {
 		return err
 	}
 
-	// 9. Progress temizle
 	_ = s.progress.Clear(ctx, engPath)
 
-	// 10. Done olarak işaretle
 	if err := subtitle.TransitionTo(valueobject.StatusDone); err != nil {
 		return err
 	}
-	return s.subtitleRepo.Save(ctx, subtitle)
+	if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
+		return err
+	}
+
+	s.publish(event.NewTranslationCompleted(engPath))
+	return nil
 }

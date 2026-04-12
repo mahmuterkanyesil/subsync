@@ -1,6 +1,6 @@
 package exception
 
-import fmt "fmt"
+import "fmt"
 
 type DomainException struct {
 	Message string
@@ -17,6 +17,7 @@ type InvalidMediaInfoException struct {
 func (e *InvalidMediaInfoException) Error() string {
 	return e.Message
 }
+
 type InvalidMediaTypeException struct {
 	Message string
 }
@@ -32,6 +33,7 @@ type InvalidSubtitleException struct {
 func (e *InvalidSubtitleException) Error() string {
 	return e.Message
 }
+
 type InvalidAPIKeyException struct {
 	Message string
 }
@@ -39,17 +41,11 @@ type InvalidAPIKeyException struct {
 func (e *InvalidAPIKeyException) Error() string {
 	return e.Message
 }
-type InvalidSubtitleStatusException struct {
-	Message string
-}
 
-func (e *InvalidSubtitleStatusException) Error() string {
-	return "invalid status transition from queued to embedded"
-}
-
+// InvalidStatusTransitionException geçersiz durum geçişlerini temsil eder.
 type InvalidStatusTransitionException struct {
-    From string  // nereden
-    To   string  // nereye
+	From string
+	To   string
 }
 
 func (e *InvalidStatusTransitionException) Error() string {

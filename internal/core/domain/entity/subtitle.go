@@ -4,9 +4,12 @@ import (
 	"subsync/internal/core/domain/exception"
 	"subsync/internal/core/domain/valueobject"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type Subtitle struct {
+	id        uuid.UUID
 	mediaInfo valueobject.MediaInfo
 	status    valueobject.SubtitleStatus
 	engPath   string
@@ -21,6 +24,7 @@ func NewSubtitle(mediaInfo valueobject.MediaInfo, engPath string) (*Subtitle, er
 		return nil, &exception.InvalidSubtitleException{Message: "engPath cannot be empty"}
 	}
 	return &Subtitle{
+		id:        uuid.New(),
 		mediaInfo: mediaInfo,
 		status:    valueobject.StatusQueued,
 		engPath:   engPath,
@@ -29,60 +33,20 @@ func NewSubtitle(mediaInfo valueobject.MediaInfo, engPath string) (*Subtitle, er
 	}, nil
 }
 
-func (s *Subtitle) EngPath() string {
-	return s.engPath
-}
-
-func (s *Subtitle) Status() valueobject.SubtitleStatus {
-	return s.status
-}
-
-func (s *Subtitle) LastError() string {
-	return s.lastError
-}
-
-func (s *Subtitle) Embedded() bool {
-	return s.embedded
-}
-
-func (s *Subtitle) CreatedAt() time.Time {
-	return s.createdAt
-}
-
-func (s *Subtitle) UpdatedAt() time.Time {
-	return s.updatedAt
-}
-
-func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
-	if s.status.CanTransitionTo(newStatus) {
-		s.status = newStatus
-		s.updatedAt = time.Now()
-		return nil
-	}
-	return &exception.InvalidStatusTransitionException{From: string(s.status), To: string(newStatus)}
-
-}
-
-func (s *Subtitle) MarkEmbedded() {
-	s.embedded = true
-	s.updatedAt = time.Now()
-}
-
-func (s *Subtitle) MarkError(err error) {
-	s.lastError = err.Error()
-	s.updatedAt = time.Now()
-}
-
-func (s *Subtitle) MediaInfo() valueobject.MediaInfo {
-	return s.mediaInfo
-}
-
-func RestoreSubtitle(mediaInfo valueobject.MediaInfo, engPath string, status valueobject.SubtitleStatus,
-	lastError string, embedded bool, createdAt, updatedAt time.Time) (*Subtitle, error) {
+func RestoreSubtitle(
+	id uuid.UUID,
+	mediaInfo valueobject.MediaInfo,
+	engPath string,
+	status valueobject.SubtitleStatus,
+	lastError string,
+	embedded bool,
+	createdAt, updatedAt time.Time,
+) (*Subtitle, error) {
 	if engPath == "" {
 		return nil, &exception.InvalidSubtitleException{Message: "engPath cannot be empty"}
 	}
 	return &Subtitle{
+		id:        id,
 		mediaInfo: mediaInfo,
 		status:    status,
 		engPath:   engPath,
@@ -91,4 +55,38 @@ func RestoreSubtitle(mediaInfo valueobject.MediaInfo, engPath string, status val
 		createdAt: createdAt,
 		updatedAt: updatedAt,
 	}, nil
+}
+
+func (s *Subtitle) ID() uuid.UUID                  { return s.id }
+func (s *Subtitle) EngPath() string                { return s.engPath }
+func (s *Subtitle) Status() valueobject.SubtitleStatus { return s.status }
+func (s *Subtitle) LastError() string              { return s.lastError }
+func (s *Subtitle) Embedded() bool                 { return s.embedded }
+func (s *Subtitle) CreatedAt() time.Time           { return s.createdAt }
+func (s *Subtitle) UpdatedAt() time.Time           { return s.updatedAt }
+func (s *Subtitle) MediaInfo() valueobject.MediaInfo { return s.mediaInfo }
+
+func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
+	if s.status.CanTransitionTo(newStatus) {
+		s.status = newStatus
+		s.updatedAt = time.Now()
+		return nil
+	}
+	return &exception.InvalidStatusTransitionException{From: string(s.status), To: string(newStatus)}
+}
+
+func (s *Subtitle) MarkEmbedded() {
+	s.embedded = true
+	s.updatedAt = time.Now()
+}
+
+func (s *Subtitle) MarkUnembedded() {
+	s.embedded = false
+	s.lastError = ""
+	s.updatedAt = time.Now()
+}
+
+func (s *Subtitle) MarkError(err error) {
+	s.lastError = err.Error()
+	s.updatedAt = time.Now()
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
@@ -21,7 +22,12 @@ type ScanningService struct {
 	watchDirs      []string
 }
 
-func NewScanningService(subtitleRepo port.SubtitleRepository, videoProcessor port.VideoProcessor, taskQueue port.TaskQueue, watchDirs []string) *ScanningService {
+func NewScanningService(
+	subtitleRepo port.SubtitleRepository,
+	videoProcessor port.VideoProcessor,
+	taskQueue port.TaskQueue,
+	watchDirs []string,
+) *ScanningService {
 	return &ScanningService{
 		subtitleRepo:   subtitleRepo,
 		videoProcessor: videoProcessor,
@@ -40,38 +46,57 @@ func extractSxxExx(path string) (season, episode int, ok bool) {
 	return season, episode, true
 }
 
+// inferMediaInfo dosya adından MediaInfo oluşturur.
+// SxxExx deseni varsa dizi, yoksa film olarak işaretler.
+func inferMediaInfo(videoPath string) valueobject.MediaInfo {
+	base := filepath.Base(videoPath)
+	nameWithoutExt := strings.TrimSuffix(base, filepath.Ext(base))
+
+	season, episode, ok := extractSxxExx(videoPath)
+	if ok {
+		// Dizi — series name: SxxExx'ten önceki kısım
+		seriesName := sxxExxRegex.Split(nameWithoutExt, 2)[0]
+		seriesName = strings.Trim(strings.ReplaceAll(seriesName, ".", " "), " -_")
+		if seriesName == "" {
+			seriesName = nameWithoutExt
+		}
+		mi, err := valueobject.NewMediaInfo(valueobject.MediaTypeSeries, seriesName, season, episode)
+		if err == nil {
+			return mi
+		}
+	}
+
+	// Film
+	mi, err := valueobject.NewMediaInfo(valueobject.MediaTypeMovie, "", 0, 0)
+	if err == nil {
+		return mi
+	}
+	return valueobject.MediaInfo{}
+}
+
 func (s *ScanningService) Scan(ctx context.Context) error {
 	for _, dir := range s.watchDirs {
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-			if info.IsDir() {
+			if err != nil || info.IsDir() {
 				return nil
 			}
 
-			// 1. Video dosyası mı?
 			ext := filepath.Ext(path)
 			if ext != ".mkv" && ext != ".mp4" {
 				return nil
 			}
 
-			// 2. Türkçe subtitle var mı?
 			hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, path)
-			if err != nil {
-				return nil
-			}
-			if hasTr {
+			if err != nil || hasTr {
 				return nil
 			}
 
-			// 3. İngilizce subtitle bul veya çıkar
 			engPath, err := s.videoProcessor.EnsureEngSubtitle(ctx, path)
 			if err != nil {
 				return nil
 			}
 
-			// 4. DB'de kayıt var mı?
+			// DB'de tam eşleşme var mı?
 			existing, err := s.subtitleRepo.FindByPath(ctx, engPath)
 			if err == nil && existing != nil {
 				status := existing.Status()
@@ -80,7 +105,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				}
 			}
 
-			// 4b. Fuzzy match by SxxExx (video relocation)
+			// SxxExx ile fuzzy match — video relocated mi?
 			if err != nil || existing == nil {
 				if season, episode, ok := extractSxxExx(path); ok {
 					candidates, dbErr := s.subtitleRepo.FindBySxxExx(ctx, season, episode)
@@ -91,25 +116,20 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				}
 			}
 
-			// 5. MediaInfo oluştur
-			mediaInfo := valueobject.MediaInfo{}
+			mediaInfo := inferMediaInfo(path)
 
-			// 6. Subtitle entity oluştur
 			subtitle, err := entity.NewSubtitle(mediaInfo, engPath)
 			if err != nil {
 				return nil
 			}
 
-			// 7. Kuyruğa ekle
-			err = s.taskQueue.Enqueue(ctx, "translate_srt", map[string]string{
-				"eng_path":   engPath,
-				"video_path": path,
-			})
-			if err != nil {
+			if err := s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
+				EngPath:   engPath,
+				VideoPath: path,
+			}); err != nil {
 				return nil
 			}
 
-			// 8. DB'ye kaydet
 			return s.subtitleRepo.Save(ctx, subtitle)
 		})
 		if err != nil {

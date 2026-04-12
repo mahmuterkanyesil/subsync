@@ -44,6 +44,7 @@ func main() {
 		apiKeyRepo,
 		translator,
 		progressStore,
+		nil, // EventPublisher — ileride bağlanabilir
 		cfg.BatchSize,
 	)
 

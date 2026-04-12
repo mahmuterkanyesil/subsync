@@ -3,11 +3,11 @@ package srt
 import (
 	"fmt"
 	"strings"
-	"subsync/internal/core/application/port"
+	"subsync/internal/core/domain/valueobject"
 )
 
-func Parse(content string) []port.SRTBlock {
-	blocks := []port.SRTBlock{}
+func Parse(content string) []valueobject.SRTBlock {
+	blocks := []valueobject.SRTBlock{}
 	parts := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n\n")
 
 	for _, part := range parts {
@@ -19,7 +19,7 @@ func Parse(content string) []port.SRTBlock {
 		index := 0
 		fmt.Sscanf(lines[0], "%d", &index)
 
-		blocks = append(blocks, port.SRTBlock{
+		blocks = append(blocks, valueobject.SRTBlock{
 			Index:     index,
 			Timestamp: lines[1],
 			Text:      strings.Join(lines[2:], "\n"),
@@ -29,7 +29,7 @@ func Parse(content string) []port.SRTBlock {
 	return blocks
 }
 
-func Format(blocks []port.SRTBlock) string {
+func Format(blocks []valueobject.SRTBlock) string {
 	var sb strings.Builder
 	for _, b := range blocks {
 		sb.WriteString(fmt.Sprintf("%d\n%s\n%s\n\n", b.Index, b.Timestamp, b.Text))

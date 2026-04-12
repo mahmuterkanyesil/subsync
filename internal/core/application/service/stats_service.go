@@ -48,8 +48,8 @@ func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
 		return err
 	}
-	return s.taskQueue.Enqueue(ctx, "translate_srt", map[string]string{
-		"eng_path": engPath,
+	return s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
+		EngPath: engPath,
 	})
 }
 
@@ -58,7 +58,14 @@ func (s *StatsService) ReEmbed(ctx context.Context, engPath string) error {
 	if err != nil {
 		return err
 	}
-	subtitle.MarkEmbedded()
+	// embedded → done veya embed_failed → done geçişi yaparak embedder'ın tekrar almasını sağla
+	status := subtitle.Status()
+	if status == valueobject.StatusEmbedded || status == valueobject.StatusEmbedFailed {
+		if err := subtitle.TransitionTo(valueobject.StatusDone); err != nil {
+			return err
+		}
+		subtitle.MarkUnembedded()
+	}
 	return s.subtitleRepo.Save(ctx, subtitle)
 }
 

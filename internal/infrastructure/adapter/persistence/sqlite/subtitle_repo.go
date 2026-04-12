@@ -7,6 +7,8 @@ import (
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type SQLiteSubtitleRepository struct {
@@ -19,15 +21,17 @@ func NewSQLiteSubtitleRepository(db *sql.DB) *SQLiteSubtitleRepository {
 
 func (r *SQLiteSubtitleRepository) Save(ctx context.Context, s *entity.Subtitle) error {
 	query := `
-		INSERT INTO subtitles (eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO subtitles (id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(eng_path) DO UPDATE SET
-			status = excluded.status,
+			id         = COALESCE(subtitles.id, excluded.id),
+			status     = excluded.status,
 			last_error = excluded.last_error,
-			embedded = excluded.embedded,
+			embedded   = excluded.embedded,
 			updated_at = excluded.updated_at
 	`
 	_, err := r.db.ExecContext(ctx, query,
+		s.ID().String(),
 		s.EngPath(),
 		s.MediaInfo().MediaType,
 		s.MediaInfo().SeriesName,
@@ -43,66 +47,56 @@ func (r *SQLiteSubtitleRepository) Save(ctx context.Context, s *entity.Subtitle)
 }
 
 func (r *SQLiteSubtitleRepository) FindByPath(ctx context.Context, path string) (*entity.Subtitle, error) {
-	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles WHERE eng_path = ?`
-
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles WHERE eng_path = ?`
 	row := r.db.QueryRowContext(ctx, query, path)
 	return scanSubtitle(row)
 }
 
 func (r *SQLiteSubtitleRepository) FindAll(ctx context.Context) ([]*entity.Subtitle, error) {
-	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles`
-
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	return scanSubtitles(rows)
 }
 
 func (r *SQLiteSubtitleRepository) FindPendingEmbed(ctx context.Context) ([]*entity.Subtitle, error) {
-	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles WHERE status = 'done' AND embedded = 0`
-
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles WHERE status = 'done' AND embedded = 0`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	return scanSubtitles(rows)
 }
 
 func (r *SQLiteSubtitleRepository) FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error) {
-	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
 		FROM subtitles
 		WHERE season_number = ? AND episode_number = ? AND season_number > 0 AND episode_number > 0`
-
 	rows, err := r.db.QueryContext(ctx, query, season, episode)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	return scanSubtitles(rows)
 }
 
 func (r *SQLiteSubtitleRepository) FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
-	query := `SELECT eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
 		FROM subtitles WHERE status = ?`
-
 	rows, err := r.db.QueryContext(ctx, query, string(status))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	return scanSubtitles(rows)
 }
 
 func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.SubtitleStats, error) {
 	query := `SELECT status, COUNT(*) FROM subtitles GROUP BY status`
-
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return port.SubtitleStats{}, err
@@ -138,39 +132,51 @@ func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.Subtitl
 // --- yardımcı fonksiyonlar ---
 
 func scanSubtitle(row *sql.Row) (*entity.Subtitle, error) {
+	var idStr sql.NullString
 	var engPath, mediaType, seriesName, status, lastError string
 	var seasonNumber, episodeNumber int
 	var embedded bool
 	var createdAt, updatedAt time.Time
 
-	err := row.Scan(&engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt)
+	err := row.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt)
 	if err != nil {
 		return nil, err
 	}
 
+	id := parseOrNewUUID(idStr)
 	mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-	return entity.RestoreSubtitle(mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
+	return entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
 }
 
 func scanSubtitles(rows *sql.Rows) ([]*entity.Subtitle, error) {
 	var result []*entity.Subtitle
 	for rows.Next() {
+		var idStr sql.NullString
 		var engPath, mediaType, seriesName, status, lastError string
 		var seasonNumber, episodeNumber int
 		var embedded bool
 		var createdAt, updatedAt time.Time
 
-		err := rows.Scan(&engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt)
-		if err != nil {
+		if err := rows.Scan(&idStr, &engPath, &mediaType, &seriesName, &seasonNumber, &episodeNumber, &status, &lastError, &embedded, &createdAt, &updatedAt); err != nil {
 			continue
 		}
 
+		id := parseOrNewUUID(idStr)
 		mediaInfo, _ := valueobject.NewMediaInfo(valueobject.MediaType(mediaType), seriesName, seasonNumber, episodeNumber)
-		subtitle, err := entity.RestoreSubtitle(mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
+		subtitle, err := entity.RestoreSubtitle(id, mediaInfo, engPath, valueobject.SubtitleStatus(status), lastError, embedded, createdAt, updatedAt)
 		if err != nil {
 			continue
 		}
 		result = append(result, subtitle)
 	}
 	return result, nil
+}
+
+func parseOrNewUUID(s sql.NullString) uuid.UUID {
+	if s.Valid && s.String != "" {
+		if id, err := uuid.Parse(s.String); err == nil {
+			return id
+		}
+	}
+	return uuid.New()
 }

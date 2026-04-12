@@ -44,7 +44,7 @@ func (s *HTTPServer) getStats(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, stats)
+	c.JSON(http.StatusOK, toStatsResponse(stats))
 }
 
 func (s *HTTPServer) listRecords(c *gin.Context) {
@@ -53,7 +53,7 @@ func (s *HTTPServer) listRecords(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, records)
+	c.JSON(http.StatusOK, toSubtitleResponses(records))
 }
 
 func (s *HTTPServer) findByPath(c *gin.Context) {
@@ -63,7 +63,7 @@ func (s *HTTPServer) findByPath(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, record)
+	c.JSON(http.StatusOK, toSubtitleResponse(record))
 }
 
 func (s *HTTPServer) reTranslate(c *gin.Context) {

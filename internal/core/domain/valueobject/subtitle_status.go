@@ -16,8 +16,8 @@ var validTransitions = map[SubtitleStatus][]SubtitleStatus{
 	StatusDone:           {StatusEmbedded, StatusQueued, StatusEmbedFailed},
 	StatusError:          {StatusQueued},
 	StatusQuotaExhausted: {StatusQueued},
-	StatusEmbedded:       {},
-	StatusEmbedFailed:    {},
+	StatusEmbedded:       {StatusDone},       // re-embed için
+	StatusEmbedFailed:    {StatusDone},       // kalıcı hata düzeldikten sonra tekrar deneme için
 }
 
 func (s SubtitleStatus) CanTransitionTo(next SubtitleStatus) bool {

@@ -30,7 +30,11 @@ func main() {
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	videoProcessor := ffmpeg.NewFFmpegProcessor()
 
-	embeddingService := service.NewEmbeddingService(subtitleRepo, videoProcessor)
+	embeddingService := service.NewEmbeddingService(
+		subtitleRepo,
+		videoProcessor,
+		nil, // EventPublisher — ileride bağlanabilir
+	)
 
 	log.Println("embedder started")
 	for {

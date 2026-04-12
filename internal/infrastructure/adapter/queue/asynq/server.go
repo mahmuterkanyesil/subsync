@@ -19,7 +19,6 @@ func NewAsynqWorkerServer(redisURL string, concurrency int, translationUseCase p
 		asynq.RedisClientOpt{Addr: redisURL},
 		asynq.Config{Concurrency: concurrency},
 	)
-
 	return &AsynqWorkerServer{
 		server:             server,
 		translationUseCase: translationUseCase,
@@ -33,16 +32,14 @@ func (s *AsynqWorkerServer) Start() error {
 }
 
 func (s *AsynqWorkerServer) handleTranslate(ctx context.Context, task *asynq.Task) error {
-	var payload map[string]string
+	var payload port.TranslateTask
 	if err := json.Unmarshal(task.Payload(), &payload); err != nil {
-		return err
-	}
-
-	engPath, ok := payload["eng_path"]
-	if !ok {
-		log.Printf("missing eng_path in payload")
+		log.Printf("invalid translate_srt payload: %v", err)
 		return nil
 	}
-
-	return s.translationUseCase.Translate(ctx, engPath)
+	if payload.EngPath == "" {
+		log.Printf("translate_srt: missing eng_path")
+		return nil
+	}
+	return s.translationUseCase.Translate(ctx, payload.EngPath)
 }

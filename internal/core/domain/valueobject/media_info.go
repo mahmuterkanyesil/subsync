@@ -14,14 +14,13 @@ func NewMediaInfo(mediaType MediaType, seriesName string, seasonNumber int, epis
 		return MediaInfo{}, &exception.InvalidMediaTypeException{Message: "invalid media type"}
 	}
 	if seriesName == "" && mediaType == MediaTypeSeries {
-		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "series name cannot be empty"}
+		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "series name cannot be empty for series type"}
 	}
 	if seasonNumber < 0 {
-		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "invalid media type"}
+		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "season number cannot be negative"}
 	}
 	if episodeNumber < 0 {
-		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "series name cannot be empty"}
-
+		return MediaInfo{}, &exception.InvalidMediaInfoException{Message: "episode number cannot be negative"}
 	}
 	return MediaInfo{
 		MediaType:     mediaType,
