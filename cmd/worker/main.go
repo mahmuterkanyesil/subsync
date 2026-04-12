@@ -25,6 +25,10 @@ func main() {
 	}
 	defer db.Close()
 
+	if err := sqlite.Migrate(db); err != nil {
+		log.Fatal(err)
+	}
+
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
 
