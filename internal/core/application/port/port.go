@@ -25,9 +25,6 @@ type SubtitleRepository interface {
 type APIKeyRepository interface {
 	Save(ctx context.Context, k *entity.APIKey) error
 	FindByID(ctx context.Context, id int) (*entity.APIKey, error)
-	FindAll(ctx context.Context) ([]*entity.APIKey, error)
-	FindByService(ctx context.Context, service string) ([]*entity.APIKey, error)
-	FindQuotaExceeded(ctx context.Context) ([]*entity.APIKey, error)
 	FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error)
 	ResetExpiredQuotas(ctx context.Context) error
 }
