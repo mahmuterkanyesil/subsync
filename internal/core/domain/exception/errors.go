@@ -32,6 +32,13 @@ type InvalidSubtitleException struct {
 func (e *InvalidSubtitleException) Error() string {
 	return e.Message
 }
+type InvalidAPIKeyException struct {
+	Message string
+}
+
+func (e *InvalidAPIKeyException) Error() string {
+	return e.Message
+}
 type InvalidSubtitleStatusException struct {
 	Message string
 }
