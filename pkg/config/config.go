@@ -1,9 +1,9 @@
 package config
 
 import (
-    "os"
-    "strconv"
-    "strings"
+	"os"
+	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -29,7 +29,7 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		WatchDirs:         strings.Split(getEnv("WATCH_DIRS", "/tv:/movies"), ":"),
+		WatchDirs:         strings.Split(getEnv("WATCH_DIRS", "/tv:/movies"), string(os.PathListSeparator)),
         RedisURL:          getEnv("REDIS_URL", "redis://localhost:6379/0"),
         StateDBPath:       getEnv("STATE_DB_PATH", "./state.db"),
         ProgressDir:       getEnv("PROGRESS_DIR", "./progress"),
