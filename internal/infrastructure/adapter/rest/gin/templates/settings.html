@@ -1,0 +1,67 @@
+{{define "title"}}Settings — Subsync{{end}}
+{{define "content"}}
+<h1>Settings</h1>
+
+{{if .Flash}}
+<div class="flash {{if .FlashOK}}flash-ok{{else}}flash-err{{end}}">{{.Flash}}</div>
+{{end}}
+
+<div class="card">
+  <h2>Watch Directories</h2>
+  <p style="margin:.5rem 0 1.25rem;color:#6b7280;font-size:.9rem;">
+    Agent bu klasörleri periyodik olarak tarayarak yeni video dosyalarını tespit eder.
+    DB'de kayıtlı klasörler env'deki <code>WATCH_DIRS</code> ayarının önüne geçer.
+  </p>
+
+  <form method="POST" action="/settings/dirs" class="form-inline" style="margin-bottom:1.5rem">
+    <input type="text" name="path" placeholder="/tv veya /movies gibi container içi yol" required style="flex:1;min-width:300px">
+    <button type="submit" class="btn btn-primary">Ekle</button>
+  </form>
+
+  {{if .WatchDirs}}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Klasör Yolu</th>
+          <th>Durum</th>
+          <th>Eklenme Tarihi</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .WatchDirs}}
+        <tr>
+          <td><code style="font-size:.85rem">{{.Path}}</code></td>
+          <td>
+            {{if .IsEnabled}}
+              <span class="badge badge-active">Aktif</span>
+            {{else}}
+              <span class="badge badge-disabled">Devre Dışı</span>
+            {{end}}
+          </td>
+          <td>{{.CreatedAt}}</td>
+          <td style="white-space:nowrap">
+            <form method="POST" action="/settings/dirs/{{.ID}}/toggle" style="display:inline">
+              <button type="submit" class="btn btn-secondary btn-sm">
+                {{if .IsEnabled}}Devre Dışı Bırak{{else}}Etkinleştir{{end}}
+              </button>
+            </form>
+            <form method="POST" action="/settings/dirs/{{.ID}}/delete" style="display:inline"
+                  onsubmit="return confirm('Bu klasörü kaldırmak istediğinizden emin misiniz?')">
+              <button type="submit" class="btn btn-danger btn-sm">Sil</button>
+            </form>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p style="color:#9ca3af;text-align:center;padding:1.5rem 0">
+    Henüz klasör eklenmedi. Yukarıdaki formu kullanarak ekleyin.<br>
+    <small>Boşken agent, <code>WATCH_DIRS</code> env değişkenini kullanmaya devam eder.</small>
+  </p>
+  {{end}}
+</div>
+{{end}}

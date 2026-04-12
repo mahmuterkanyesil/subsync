@@ -201,6 +201,7 @@
     <a href="/" {{if eq .CurrentPage "dashboard"}}class="active"{{end}}>Dashboard</a>
     <a href="/records" {{if eq .CurrentPage "records"}}class="active"{{end}}>Records</a>
     <a href="/keys" {{if eq .CurrentPage "keys"}}class="active"{{end}}>API Keys</a>
+    <a href="/settings" {{if eq .CurrentPage "settings"}}class="active"{{end}}>Settings</a>
   </nav>
   <main>
     {{template "content" .}}

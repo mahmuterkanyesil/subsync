@@ -28,9 +28,10 @@ func main() {
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
+	watchDirRepo := sqlite.NewSQLiteWatchDirRepository(db)
 	taskQueue := asynq.NewAsynqTaskQueue(cfg.RedisURL)
 
-	statsService := service.NewStatsService(subtitleRepo, apiKeyRepo, taskQueue)
+	statsService := service.NewStatsService(subtitleRepo, apiKeyRepo, watchDirRepo, taskQueue)
 
 	server := gin.NewHTTPServer(statsService, cfg.APIPort)
 

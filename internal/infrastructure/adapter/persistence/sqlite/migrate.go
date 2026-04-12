@@ -11,11 +11,16 @@ var initSQL string
 //go:embed migrations/002_add_uuid.sql
 var migration002SQL string
 
+//go:embed migrations/003_add_watch_dirs.sql
+var migration003SQL string
+
 func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(initSQL); err != nil {
 		return err
 	}
 	// 002: ALTER TABLE — mevcut sütun varsa hatayı yoksay (idempotent)
 	_, _ = db.Exec(migration002SQL)
+	// 003: CREATE TABLE IF NOT EXISTS — idempotent
+	_, _ = db.Exec(migration003SQL)
 	return nil
 }

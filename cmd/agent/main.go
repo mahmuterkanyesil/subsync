@@ -29,10 +29,11 @@ func main() {
 	}
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
+	watchDirRepo := sqlite.NewSQLiteWatchDirRepository(db)
 	videoProcessor := ffmpeg.NewFFmpegProcessor()
 	taskQueue := asynq.NewAsynqTaskQueue(cfg.RedisURL)
 
-	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs)
+	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs, watchDirRepo)
 
 	log.Println("agent started")
 	for {

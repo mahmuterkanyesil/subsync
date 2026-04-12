@@ -19,7 +19,8 @@ type ScanningService struct {
 	subtitleRepo   port.SubtitleRepository
 	videoProcessor port.VideoProcessor
 	taskQueue      port.TaskQueue
-	watchDirs      []string
+	watchDirs      []string           // fallback from env config
+	watchDirRepo   port.WatchDirRepository // optional: overrides watchDirs when non-empty
 }
 
 func NewScanningService(
@@ -27,13 +28,24 @@ func NewScanningService(
 	videoProcessor port.VideoProcessor,
 	taskQueue port.TaskQueue,
 	watchDirs []string,
+	watchDirRepo port.WatchDirRepository,
 ) *ScanningService {
 	return &ScanningService{
 		subtitleRepo:   subtitleRepo,
 		videoProcessor: videoProcessor,
 		taskQueue:      taskQueue,
 		watchDirs:      watchDirs,
+		watchDirRepo:   watchDirRepo,
 	}
+}
+
+func (s *ScanningService) resolveWatchDirs(ctx context.Context) []string {
+	if s.watchDirRepo != nil {
+		if dbDirs, err := s.watchDirRepo.FindEnabled(ctx); err == nil && len(dbDirs) > 0 {
+			return dbDirs
+		}
+	}
+	return s.watchDirs
 }
 
 func extractSxxExx(path string) (season, episode int, ok bool) {
@@ -75,7 +87,7 @@ func inferMediaInfo(videoPath string) valueobject.MediaInfo {
 }
 
 func (s *ScanningService) Scan(ctx context.Context) error {
-	for _, dir := range s.watchDirs {
+	for _, dir := range s.resolveWatchDirs(ctx) {
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return nil

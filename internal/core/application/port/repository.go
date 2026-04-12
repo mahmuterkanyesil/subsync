@@ -26,6 +26,14 @@ type SubtitleRepository interface {
 	FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 }
 
+type WatchDirRepository interface {
+	FindAll(ctx context.Context) ([]*entity.WatchDir, error)
+	FindEnabled(ctx context.Context) ([]string, error)
+	FindByID(ctx context.Context, id int) (*entity.WatchDir, error)
+	Save(ctx context.Context, w *entity.WatchDir) error
+	Delete(ctx context.Context, id int) error
+}
+
 type APIKeyRepository interface {
 	Save(ctx context.Context, k *entity.APIKey) error
 	FindByID(ctx context.Context, id int) (*entity.APIKey, error)

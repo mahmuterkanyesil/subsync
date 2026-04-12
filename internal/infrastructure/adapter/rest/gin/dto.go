@@ -107,6 +107,33 @@ func toAPIKeyResponses(keys []*entity.APIKey) []APIKeyResponse {
 	return result
 }
 
+type WatchDirResponse struct {
+	ID        int    `json:"id"`
+	Path      string `json:"path"`
+	IsEnabled bool   `json:"is_enabled"`
+	CreatedAt string `json:"created_at"`
+}
+
+func toWatchDirResponses(dirs []*entity.WatchDir) []WatchDirResponse {
+	result := make([]WatchDirResponse, len(dirs))
+	for i, d := range dirs {
+		result[i] = WatchDirResponse{
+			ID:        d.ID(),
+			Path:      d.Path(),
+			IsEnabled: d.IsEnabled(),
+			CreatedAt: d.CreatedAt().Format("2006-01-02 15:04"),
+		}
+	}
+	return result
+}
+
+type SettingsData struct {
+	CurrentPage string
+	WatchDirs   []WatchDirResponse
+	Flash       string
+	FlashOK     bool
+}
+
 type DashboardData struct {
 	CurrentPage string
 	Stats       StatsResponse

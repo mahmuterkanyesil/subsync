@@ -10,17 +10,20 @@ import (
 type StatsService struct {
 	subtitleRepo port.SubtitleRepository
 	apiKeyRepo   port.APIKeyRepository
+	watchDirRepo port.WatchDirRepository
 	taskQueue    port.TaskQueue
 }
 
 func NewStatsService(
 	subtitleRepo port.SubtitleRepository,
 	apiKeyRepo port.APIKeyRepository,
+	watchDirRepo port.WatchDirRepository,
 	taskQueue port.TaskQueue,
 ) *StatsService {
 	return &StatsService{
 		subtitleRepo: subtitleRepo,
 		apiKeyRepo:   apiKeyRepo,
+		watchDirRepo: watchDirRepo,
 		taskQueue:    taskQueue,
 	}
 }
@@ -114,4 +117,29 @@ func (s *StatsService) ActivateAPIKey(ctx context.Context, id int) error {
 
 func (s *StatsService) ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
 	return s.subtitleRepo.FindByStatus(ctx, status)
+}
+
+func (s *StatsService) ListWatchDirs(ctx context.Context) ([]*entity.WatchDir, error) {
+	return s.watchDirRepo.FindAll(ctx)
+}
+
+func (s *StatsService) AddWatchDir(ctx context.Context, path string) error {
+	wd, err := entity.NewWatchDir(path)
+	if err != nil {
+		return err
+	}
+	return s.watchDirRepo.Save(ctx, wd)
+}
+
+func (s *StatsService) DeleteWatchDir(ctx context.Context, id int) error {
+	return s.watchDirRepo.Delete(ctx, id)
+}
+
+func (s *StatsService) ToggleWatchDir(ctx context.Context, id int) error {
+	wd, err := s.watchDirRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	wd.Toggle()
+	return s.watchDirRepo.Save(ctx, wd)
 }

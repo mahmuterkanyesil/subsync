@@ -19,6 +19,7 @@ type templates struct {
 	dashboard *template.Template
 	records   *template.Template
 	keys      *template.Template
+	settings  *template.Template
 }
 
 var tmplFuncs = template.FuncMap{
@@ -38,10 +39,15 @@ func newTemplates() (*templates, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse keys template: %w", err)
 	}
+	settings, err := template.New("").Funcs(tmplFuncs).ParseFS(templateFS, "templates/layout.html", "templates/settings.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse settings template: %w", err)
+	}
 	return &templates{
 		dashboard: dashboard,
 		records:   records,
 		keys:      keys,
+		settings:  settings,
 	}, nil
 }
 
@@ -90,6 +96,11 @@ func (s *HTTPServer) Start() error {
 	r.POST("/keys/:id/activate", s.webActivateKey)
 	r.POST("/keys/:id/disable", s.webDisableKey)
 	r.POST("/keys/:id/reset-quota", s.webResetQuota)
+
+	r.GET("/settings", s.webSettings)
+	r.POST("/settings/dirs", s.webAddWatchDir)
+	r.POST("/settings/dirs/:id/toggle", s.webToggleWatchDir)
+	r.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
 
 	return r.Run(":" + s.port)
 }
@@ -263,18 +274,7 @@ func (s *HTTPServer) webKeys(c *gin.Context) {
 		return
 	}
 
-	flashMsg := ""
-	flashOK := false
-	if flash == "success" {
-		flashMsg = "Operation completed successfully."
-		flashOK = true
-	} else if flash == "error" {
-		flashMsg = msg
-		if flashMsg == "" {
-			flashMsg = "An error occurred."
-		}
-		flashOK = false
-	}
+	flashMsg, flashOK := resolveFlash(flash, msg)
 
 	data := KeysData{
 		CurrentPage: "keys",
@@ -335,6 +335,57 @@ func (s *HTTPServer) webResetQuota(c *gin.Context) {
 	c.Redirect(http.StatusSeeOther, "/keys?flash=success")
 }
 
+// ─── Settings handlers ───────────────────────────────────────────────────────
+
+func (s *HTTPServer) webSettings(c *gin.Context) {
+	flash := c.Query("flash")
+	msg := c.Query("msg")
+
+	dirs, err := s.statsUseCase.ListWatchDirs(c.Request.Context())
+	if err != nil {
+		c.String(http.StatusInternalServerError, "error: %v", err)
+		return
+	}
+
+	flashMsg, flashOK := resolveFlash(flash, msg)
+	data := SettingsData{
+		CurrentPage: "settings",
+		WatchDirs:   toWatchDirResponses(dirs),
+		Flash:       flashMsg,
+		FlashOK:     flashOK,
+	}
+	c.Status(http.StatusOK)
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	_ = s.tmpl.settings.ExecuteTemplate(c.Writer, "layout", data)
+}
+
+func (s *HTTPServer) webAddWatchDir(c *gin.Context) {
+	path := c.PostForm("path")
+	if err := s.statsUseCase.AddWatchDir(c.Request.Context(), path); err != nil {
+		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/settings?flash=success")
+}
+
+func (s *HTTPServer) webToggleWatchDir(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if err := s.statsUseCase.ToggleWatchDir(c.Request.Context(), id); err != nil {
+		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/settings?flash=success")
+}
+
+func (s *HTTPServer) webDeleteWatchDir(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	if err := s.statsUseCase.DeleteWatchDir(c.Request.Context(), id); err != nil {
+		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/settings?flash=success")
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func parseID(s string) int {
@@ -345,4 +396,17 @@ func parseID(s string) int {
 
 func encodeMsg(s string) string {
 	return filepath.Base(s) // simple sanitize — strip path separators
+}
+
+func resolveFlash(flash, msg string) (string, bool) {
+	switch flash {
+	case "success":
+		return "Operation completed successfully.", true
+	case "error":
+		if msg == "" {
+			msg = "An error occurred."
+		}
+		return msg, false
+	}
+	return "", false
 }
