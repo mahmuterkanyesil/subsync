@@ -35,7 +35,7 @@ func (s *EmbeddingService) EmbedPending(ctx context.Context) error {
 			continue
 		}
 		if hasTr {
-			subtitle.MarkEmbedded(true)
+			subtitle.MarkEmbedded()
 			_ = s.subtitleRepo.Save(ctx, subtitle)
 			continue
 		}
@@ -53,7 +53,7 @@ func (s *EmbeddingService) EmbedPending(ctx context.Context) error {
 		}
 
 		// 5. Embedded olarak işaretle
-		subtitle.MarkEmbedded(true)
+		subtitle.MarkEmbedded()
 		_ = s.subtitleRepo.Save(ctx, subtitle)
 	}
 

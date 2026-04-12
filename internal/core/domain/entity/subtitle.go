@@ -63,7 +63,7 @@ func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
 
 }
 
-func (s *Subtitle) MarkEmbedded(embedded bool) {
+func (s *Subtitle) MarkEmbedded() {
 	s.embedded = true
 	s.updatedAt = time.Now()
 }
