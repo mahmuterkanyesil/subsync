@@ -1,7 +1,6 @@
 package media
 
 import (
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,7 +13,9 @@ var (
 )
 
 func ParseMediaInfo(filePath string) valueobject.MediaInfo {
-	normalized := filepath.ToSlash(filePath)
+	// Normalize any backslashes to forward slashes so parsing works
+	// the same on non-Windows CI runners when given Windows paths.
+	normalized := strings.ReplaceAll(filePath, "\\", "/")
 	parts := strings.Split(normalized, "/")
 
 	if !containsDir(parts, "tv") {
