@@ -98,6 +98,9 @@ func (s *HTTPServer) Start() error {
 		api.POST("/internal/logs", s.receiveLog)
 	}
 
+	// Add a top-level /health alias so external healthchecks can hit /health
+	r.GET("/health", s.health)
+
 	// Web UI routes
 	r.GET("/", s.webDashboard)
 	r.GET("/logs", s.webLogs)
