@@ -1,0 +1,26 @@
+# Override examples (use `docker compose -f docker-compose.yml -f docker-compose.override.yml up -d`)
+# Profiles: low-power, default
+
+services:
+  agent:
+    environment:
+      - SCAN_INTERVAL_SEC=120
+      - LOG_LEVEL=warn
+  worker:
+    environment:
+      - WORKER_CONCURRENCY=1
+      - BATCH_SIZE=200
+      - LOG_LEVEL=warn
+  embedder:
+    environment:
+      - EMBED_INTERVAL_SEC=1200
+      - LOG_LEVEL=warn
+
+# Example volumes for NAS-like deployment (uncomment and edit paths)
+# volumes:
+#   data:
+#     external: true
+#   tv:
+#     external: true
+#   movies:
+#     external: true

@@ -23,6 +23,12 @@ services:
       - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
     depends_on:
       - redis
+    healthcheck:
+      test: [ "CMD-SHELL", "ps aux | grep /app/bin/agent | grep -v grep || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   worker:
     build: .
@@ -42,6 +48,12 @@ services:
       - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
     depends_on:
       - redis
+    healthcheck:
+      test: [ "CMD-SHELL", "ps aux | grep /app/bin/worker | grep -v grep || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   embedder:
     build: .
@@ -58,6 +70,12 @@ services:
       - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies
     depends_on:
       - redis
+    healthcheck:
+      test: [ "CMD-SHELL", "ps aux | grep /app/bin/embedder | grep -v grep || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   api:
     build: .
@@ -73,6 +91,12 @@ services:
       - ${DATA_DIR:-./data}:/data
     depends_on:
       - redis
+    healthcheck:
+      test: [ "CMD-SHELL", "ps aux | grep /app/bin/api | grep -v grep || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   redis_data:
