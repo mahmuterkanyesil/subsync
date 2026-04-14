@@ -1,0 +1,32 @@
+{{define "content"}}
+<div class="card">
+    <h1>Logs</h1>
+    <p style="margin-bottom:1rem;color:#6b7280">Live console logs from services (in-memory, not persisted).</p>
+    <div class="card"
+        style="height:60vh;overflow:auto;font-family:monospace;white-space:pre-wrap;background:#0b1220;color:#e6eef8;padding:1rem;">
+        <div id="log-lines">Loading...</div>
+    </div>
+</div>
+
+<script>
+    async function fetchLogs() {
+        try {
+            const res = await fetch('/api/logs?limit=500');
+            const data = await res.json();
+            const container = document.getElementById('log-lines');
+            container.innerHTML = '';
+            data.forEach(e => {
+                const el = document.createElement('div');
+                el.textContent = `[${e.time}] ${e.level.toUpperCase()} ${e.message}`;
+                container.appendChild(el);
+            });
+            // scroll to bottom
+            container.parentElement.scrollTop = container.parentElement.scrollHeight;
+        } catch (err) {
+            console.error(err);
+        }
+    }
+    fetchLogs();
+    setInterval(fetchLogs, 3000);
+</script>
+{{end}}

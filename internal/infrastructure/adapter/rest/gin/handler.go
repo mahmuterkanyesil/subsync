@@ -6,8 +6,11 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"subsync/internal/core/application/port"
 	valueobject "subsync/internal/core/domain/valueobject"
+	"subsync/pkg/logger"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -20,6 +23,7 @@ type templates struct {
 	records   *template.Template
 	keys      *template.Template
 	settings  *template.Template
+	logs      *template.Template
 }
 
 var tmplFuncs = template.FuncMap{
@@ -43,11 +47,16 @@ func newTemplates() (*templates, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse settings template: %w", err)
 	}
+	logs, err := template.New("").Funcs(tmplFuncs).ParseFS(templateFS, "templates/layout.html", "templates/logs.html")
+	if err != nil {
+		return nil, fmt.Errorf("parse logs template: %w", err)
+	}
 	return &templates{
 		dashboard: dashboard,
 		records:   records,
 		keys:      keys,
 		settings:  settings,
+		logs:      logs,
 	}, nil
 }
 
@@ -83,10 +92,14 @@ func (s *HTTPServer) Start() error {
 		api.POST("/keys", s.addApiKey)
 		api.POST("/keys/:id/disable", s.disableApiKey)
 		api.POST("/keys/:id/reset-quota", s.resetQuota)
+		api.GET("/logs", s.apiLogs)
+		// receive forwarded logs from other services
+		api.POST("/internal/logs", s.receiveLog)
 	}
 
 	// Web UI routes
 	r.GET("/", s.webDashboard)
+	r.GET("/logs", s.webLogs)
 	r.GET("/records", s.webRecords)
 	r.POST("/records/retry", s.webRetry)
 	r.POST("/records/re-embed", s.webReEmbed)
@@ -103,6 +116,54 @@ func (s *HTTPServer) Start() error {
 	r.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
 
 	return r.Run(":" + s.port)
+}
+
+// logs API
+func (s *HTTPServer) apiLogs(c *gin.Context) {
+	limit := 200
+	if l := c.Query("limit"); l != "" {
+		if i, err := strconv.Atoi(l); err == nil {
+			limit = i
+		}
+	}
+	entries := logger.GetRecent(limit)
+	// format entries for JSON
+	out := make([]gin.H, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, gin.H{"time": e.Time.Format("2006-01-02T15:04:05Z"), "level": e.Level, "message": e.Message})
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+// receive forwarded logs from other services
+func (s *HTTPServer) receiveLog(c *gin.Context) {
+	var body struct {
+		Time    string `json:"time"`
+		Level   string `json:"level"`
+		Message string `json:"message"`
+	}
+	if err := c.BindJSON(&body); err != nil {
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	// parse time if present
+	t := time.Now().UTC()
+	if body.Time != "" {
+		if parsed, err := time.Parse(time.RFC3339, body.Time); err == nil {
+			t = parsed
+		}
+	}
+	logger.ReceiveRemote(t, body.Level, body.Message)
+	c.Status(http.StatusNoContent)
+}
+
+func (s *HTTPServer) webLogs(c *gin.Context) {
+	data := LogsData{CurrentPage: "logs"}
+	c.Status(http.StatusOK)
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	if err := s.tmpl.logs.ExecuteTemplate(c.Writer, "layout", data); err != nil {
+		_ = err
+	}
 }
 
 // ─── JSON API handlers ───────────────────────────────────────────────────────

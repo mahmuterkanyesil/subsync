@@ -1,11 +1,19 @@
-{{define "layout"}}<!DOCTYPE html>
+{{define "layout"}}
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{block "title" .}}Subsync{{end}}</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -21,8 +29,9 @@
       display: flex;
       align-items: center;
       height: 56px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
     }
+
     nav .logo {
       font-size: 1.25rem;
       font-weight: 700;
@@ -31,6 +40,7 @@
       text-decoration: none;
       margin-right: 2.5rem;
     }
+
     nav a {
       color: #a8c8e8;
       text-decoration: none;
@@ -40,8 +50,17 @@
       transition: background 0.15s, color 0.15s;
       margin-right: 0.25rem;
     }
-    nav a:hover { background: #1e3a5f; color: #e0f0ff; }
-    nav a.active { background: #1e3a5f; color: #ffffff; font-weight: 600; }
+
+    nav a:hover {
+      background: #1e3a5f;
+      color: #e0f0ff;
+    }
+
+    nav a.active {
+      background: #1e3a5f;
+      color: #ffffff;
+      font-weight: 600;
+    }
 
     /* Main content */
     main {
@@ -50,15 +69,26 @@
       padding: 0 1.5rem;
     }
 
-    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; color: #0d1b2a; }
-    h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; color: #1a1a2e; }
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      color: #0d1b2a;
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: #1a1a2e;
+    }
 
     /* Cards */
     .card {
       background: #ffffff;
       border-radius: 8px;
       padding: 1.25rem 1.5rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
       margin-bottom: 1.5rem;
     }
 
@@ -69,20 +99,36 @@
       gap: 1rem;
       margin-bottom: 2rem;
     }
+
     .stat-card {
       background: #ffffff;
       border-radius: 8px;
       padding: 1.25rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
       text-align: center;
       text-decoration: none;
       color: inherit;
       transition: box-shadow 0.15s, transform 0.15s;
       display: block;
     }
-    .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: translateY(-2px); }
-    .stat-card .label { font-size: 0.78rem; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.5rem; }
-    .stat-card .value { font-size: 2rem; font-weight: 700; }
+
+    .stat-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      transform: translateY(-2px);
+    }
+
+    .stat-card .label {
+      font-size: 0.78rem;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-card .value {
+      font-size: 2rem;
+      font-weight: 700;
+    }
 
     /* Status badge colours */
     .badge {
@@ -93,29 +139,97 @@
       font-weight: 600;
       white-space: nowrap;
     }
-    .badge-queued          { background: #dbeafe; color: #1d4ed8; }
-    .badge-done            { background: #ccfbf1; color: #0f766e; }
-    .badge-embedded        { background: #d1fae5; color: #065f46; }
-    .badge-error           { background: #fee2e2; color: #b91c1c; }
-    .badge-quota_exhausted { background: #ffedd5; color: #c2410c; }
-    .badge-embed_failed    { background: #fce7f3; color: #9d174d; }
-    .badge-active          { background: #d1fae5; color: #065f46; }
-    .badge-disabled        { background: #f3f4f6; color: #6b7280; }
-    .badge-ok              { background: #d1fae5; color: #065f46; }
-    .badge-exceeded        { background: #ffedd5; color: #c2410c; }
+
+    .badge-queued {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .badge-done {
+      background: #ccfbf1;
+      color: #0f766e;
+    }
+
+    .badge-embedded {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge-error {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .badge-quota_exhausted {
+      background: #ffedd5;
+      color: #c2410c;
+    }
+
+    .badge-embed_failed {
+      background: #fce7f3;
+      color: #9d174d;
+    }
+
+    .badge-active {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge-disabled {
+      background: #f3f4f6;
+      color: #6b7280;
+    }
+
+    .badge-ok {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .badge-exceeded {
+      background: #ffedd5;
+      color: #c2410c;
+    }
 
     /* Stat value colours */
-    .color-total          { color: #374151; }
-    .color-queued         { color: #1d4ed8; }
-    .color-done           { color: #0f766e; }
-    .color-embedded       { color: #065f46; }
-    .color-error          { color: #b91c1c; }
-    .color-quota_exhausted{ color: #c2410c; }
-    .color-embed_failed   { color: #9d174d; }
+    .color-total {
+      color: #374151;
+    }
+
+    .color-queued {
+      color: #1d4ed8;
+    }
+
+    .color-done {
+      color: #0f766e;
+    }
+
+    .color-embedded {
+      color: #065f46;
+    }
+
+    .color-error {
+      color: #b91c1c;
+    }
+
+    .color-quota_exhausted {
+      color: #c2410c;
+    }
+
+    .color-embed_failed {
+      color: #9d174d;
+    }
 
     /* Table */
-    .table-wrap { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
     th {
       background: #f8fafc;
       text-align: left;
@@ -126,9 +240,20 @@
       color: #6b7280;
       border-bottom: 1px solid #e5e7eb;
     }
-    td { padding: 0.7rem 0.85rem; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #f9fafb; }
+
+    td {
+      padding: 0.7rem 0.85rem;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f9fafb;
+    }
 
     /* Buttons */
     .btn {
@@ -142,16 +267,49 @@
       text-decoration: none;
       transition: opacity 0.15s;
     }
-    .btn:hover { opacity: 0.85; }
-    .btn-primary   { background: #1d4ed8; color: #fff; }
-    .btn-success   { background: #059669; color: #fff; }
-    .btn-danger    { background: #dc2626; color: #fff; }
-    .btn-warning   { background: #d97706; color: #fff; }
-    .btn-secondary { background: #6b7280; color: #fff; }
-    .btn-sm { padding: 0.25rem 0.55rem; font-size: 0.75rem; }
+
+    .btn:hover {
+      opacity: 0.85;
+    }
+
+    .btn-primary {
+      background: #1d4ed8;
+      color: #fff;
+    }
+
+    .btn-success {
+      background: #059669;
+      color: #fff;
+    }
+
+    .btn-danger {
+      background: #dc2626;
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: #d97706;
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #6b7280;
+      color: #fff;
+    }
+
+    .btn-sm {
+      padding: 0.25rem 0.55rem;
+      font-size: 0.75rem;
+    }
 
     /* Filter bar */
-    .filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
     .filter-bar a {
       padding: 0.35rem 0.9rem;
       border-radius: 20px;
@@ -162,12 +320,27 @@
       font-weight: 500;
       transition: background 0.15s, color 0.15s;
     }
-    .filter-bar a:hover  { background: #d1d5db; }
-    .filter-bar a.active { background: #0d1b2a; color: #fff; }
+
+    .filter-bar a:hover {
+      background: #d1d5db;
+    }
+
+    .filter-bar a.active {
+      background: #0d1b2a;
+      color: #fff;
+    }
 
     /* Forms */
-    .form-inline { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; }
-    input[type="text"], input[type="password"], select {
+    .form-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    select {
       padding: 0.45rem 0.75rem;
       border: 1px solid #d1d5db;
       border-radius: 5px;
@@ -175,7 +348,11 @@
       outline: none;
       transition: border-color 0.15s;
     }
-    input[type="text"]:focus, input[type="password"]:focus { border-color: #1d4ed8; }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      border-color: #1d4ed8;
+    }
 
     /* Flash */
     .flash {
@@ -185,26 +362,48 @@
       font-size: 0.875rem;
       font-weight: 500;
     }
-    .flash-ok  { background: #d1fae5; color: #065f46; }
-    .flash-err { background: #fee2e2; color: #b91c1c; }
+
+    .flash-ok {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .flash-err {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
 
     /* Count */
-    .record-count { font-size: 0.82rem; color: #6b7280; margin-bottom: 0.75rem; }
+    .record-count {
+      font-size: 0.82rem;
+      color: #6b7280;
+      margin-bottom: 0.75rem;
+    }
 
     /* Truncate long paths */
-    .path-cell { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; font-size: 0.8rem; }
+    .path-cell {
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
   </style>
 </head>
+
 <body>
   <nav>
     <a class="logo" href="/">Subsync</a>
-    <a href="/" {{if eq .CurrentPage "dashboard"}}class="active"{{end}}>Dashboard</a>
-    <a href="/records" {{if eq .CurrentPage "records"}}class="active"{{end}}>Records</a>
-    <a href="/keys" {{if eq .CurrentPage "keys"}}class="active"{{end}}>API Keys</a>
-    <a href="/settings" {{if eq .CurrentPage "settings"}}class="active"{{end}}>Settings</a>
+    <a href="/" {{if eq .CurrentPage "dashboard" }}class="active" {{end}}>Dashboard</a>
+    <a href="/records" {{if eq .CurrentPage "records" }}class="active" {{end}}>Records</a>
+    <a href="/keys" {{if eq .CurrentPage "keys" }}class="active" {{end}}>API Keys</a>
+    <a href="/settings" {{if eq .CurrentPage "settings" }}class="active" {{end}}>Settings</a>
+    <a href="/logs" {{if eq .CurrentPage "logs" }}class="active" {{end}}>Logs</a>
   </nav>
   <main>
     {{template "content" .}}
   </main>
 </body>
+
 </html>{{end}}

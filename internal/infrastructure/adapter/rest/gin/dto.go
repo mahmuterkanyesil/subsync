@@ -152,3 +152,7 @@ type KeysData struct {
 	Flash       string
 	FlashOK     bool
 }
+
+type LogsData struct {
+	CurrentPage string
+}

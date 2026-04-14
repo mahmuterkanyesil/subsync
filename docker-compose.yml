@@ -15,6 +15,8 @@ services:
       - PROGRESS_DIR=/data/progress
       - WATCH_DIRS=/tv:/movies
       - SCAN_INTERVAL_SEC=30
+      - LOG_FORWARD_URL=http://api:8080/api/internal/logs
+      - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
       - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
@@ -32,6 +34,8 @@ services:
       - PROGRESS_DIR=/data/progress
       - BATCH_SIZE=500
       - WORKER_CONCURRENCY=2
+      - LOG_FORWARD_URL=http://api:8080/api/internal/logs
+      - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
       - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
@@ -46,6 +50,8 @@ services:
     environment:
       - STATE_DB_PATH=/data/state.db
       - EMBED_INTERVAL_SEC=600
+      - LOG_FORWARD_URL=http://api:8080/api/internal/logs
+      - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
       - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv
