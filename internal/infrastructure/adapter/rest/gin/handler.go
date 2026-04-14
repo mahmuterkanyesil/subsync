@@ -84,6 +84,7 @@ func (s *HTTPServer) Start() error {
 	// JSON API routes (existing — kept intact)
 	api := r.Group("/api")
 	{
+		api.GET("/health", s.health)
 		api.GET("/stats", s.getStats)
 		api.GET("/records", s.listRecords)
 		api.GET("/records/:engPath", s.findByPath)
@@ -164,6 +165,11 @@ func (s *HTTPServer) webLogs(c *gin.Context) {
 	if err := s.tmpl.logs.ExecuteTemplate(c.Writer, "layout", data); err != nil {
 		_ = err
 	}
+}
+
+// health endpoint
+func (s *HTTPServer) health(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "time": time.Now().UTC().Format(time.RFC3339)})
 }
 
 // ─── JSON API handlers ───────────────────────────────────────────────────────

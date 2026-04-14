@@ -14,9 +14,11 @@ RUN go build -o bin/embedder ./cmd/embedder
 RUN go build -o bin/api ./cmd/api
 
 # Stage 2 — Run
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
-RUN apk add --no-cache ffmpeg
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /app/bin/ ./bin/
