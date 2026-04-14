@@ -11,12 +11,15 @@ import (
 	"subsync/internal/infrastructure/adapter/queue/asynq"
 	"subsync/internal/infrastructure/adapter/video/ffmpeg"
 	"subsync/pkg/config"
+	"subsync/pkg/logger"
 
 	_ "modernc.org/sqlite"
 )
 
 func main() {
 	cfg := config.Load()
+	// init logger early
+	logger.Init()
 
 	db, err := sql.Open("sqlite", cfg.StateDBPath)
 	if err != nil {
@@ -35,10 +38,10 @@ func main() {
 
 	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs, watchDirRepo)
 
-	log.Println("agent started")
+	logger.Info("agent started")
 	for {
 		if err := scanner.Scan(context.Background()); err != nil {
-			log.Printf("scan error: %v", err)
+			logger.Error("scan error: %v", err)
 		}
 		time.Sleep(time.Duration(cfg.ScanIntervalSec) * time.Second)
 	}

@@ -2,13 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"os"
 
 	"subsync/internal/core/application/service"
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
 	"subsync/internal/infrastructure/adapter/queue/asynq"
 	"subsync/internal/infrastructure/adapter/translation/gemini"
 	"subsync/pkg/config"
+	"subsync/pkg/logger"
 	"subsync/pkg/progress"
 
 	_ "modernc.org/sqlite"
@@ -16,15 +17,18 @@ import (
 
 func main() {
 	cfg := config.Load()
+	logger.Init()
 
 	db, err := sql.Open("sqlite", cfg.StateDBPath)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := sqlite.Migrate(db); err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
@@ -45,8 +49,9 @@ func main() {
 
 	workerServer := asynq.NewAsynqWorkerServer(cfg.RedisURL, cfg.WorkerConcurrency, translationService)
 
-	log.Println("worker started")
+	logger.Info("worker started")
 	if err := workerServer.Start(); err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 }

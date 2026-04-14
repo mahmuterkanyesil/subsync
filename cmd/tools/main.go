@@ -11,6 +11,7 @@ import (
 	"subsync/internal/core/domain/valueobject"
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
 	"subsync/pkg/config"
+	"subsync/pkg/logger"
 
 	_ "modernc.org/sqlite"
 )
@@ -24,10 +25,12 @@ func main() {
 	}
 
 	cfg := config.Load()
+	logger.Init()
 
 	db, err := sql.Open("sqlite", cfg.StateDBPath)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -42,7 +45,8 @@ func main() {
 	case "requeue_failed":
 		entries, err := subtitleRepo.FindByStatus(ctx, valueobject.StatusError)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error("%v", err)
+			os.Exit(1)
 		}
 		requeued := 0
 		for _, s := range entries {
@@ -51,7 +55,7 @@ func main() {
 				continue
 			}
 			if err := subtitleRepo.Save(ctx, s); err != nil {
-				log.Printf("save error %s: %v", s.EngPath(), err)
+				logger.Warn("save error %s: %v", s.EngPath(), err)
 				continue
 			}
 			requeued++
@@ -61,7 +65,8 @@ func main() {
 	case "embed_existing":
 		entries, err := subtitleRepo.FindByStatus(ctx, valueobject.StatusDone)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error("%v", err)
+			os.Exit(1)
 		}
 		ready := 0
 		for _, s := range entries {
@@ -71,10 +76,10 @@ func main() {
 			}
 			// Re-save to ensure the embedder picks it up on next cycle
 			if err := subtitleRepo.Save(ctx, s); err != nil {
-				log.Printf("save error %s: %v", s.EngPath(), err)
+				logger.Warn("save error %s: %v", s.EngPath(), err)
 				continue
 			}
-			log.Printf("ready for embed: %s", s.EngPath())
+			logger.Info("ready for embed: %s", s.EngPath())
 			ready++
 		}
 		fmt.Printf("%d entries ready for embed (embedder will pick up on next cycle)\n", ready)

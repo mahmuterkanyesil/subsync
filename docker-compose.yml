@@ -34,6 +34,8 @@ services:
       - WORKER_CONCURRENCY=2
     volumes:
       - ${DATA_DIR:-./data}:/data
+      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
+      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
     depends_on:
       - redis
 

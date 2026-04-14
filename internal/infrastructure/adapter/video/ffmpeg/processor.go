@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"subsync/internal/core/application/port"
+	"subsync/pkg/logger"
 )
 
 var engSrtRegex = regexp.MustCompile(`(?i)\.en[^a-z]|\.eng[^a-z]`)
@@ -45,6 +46,7 @@ func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath stri
 	)
 	out, err := cmd.Output()
 	if err != nil {
+		logger.Warn("ffprobe failed for %s: %v", videoPath, err)
 		return false, err
 	}
 	output := strings.ToLower(string(out))
@@ -87,7 +89,9 @@ func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath strin
 		engPath,
 		"-y",
 	)
+	logger.Info("extracting subtitle stream %d from %s to %s", streamIndex, videoPath, engPath)
 	if err := cmd.Run(); err != nil {
+		logger.Error("subtitle extraction failed for %s: %v", videoPath, err)
 		return "", fmt.Errorf("subtitle extraction failed: %w", err)
 	}
 

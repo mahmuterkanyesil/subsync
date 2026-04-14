@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +10,7 @@ import (
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
+	"subsync/pkg/logger"
 )
 
 var sxxExxRegex = regexp.MustCompile(`[Ss](\d{1,2})[Ee](\d{1,2})`)
@@ -88,23 +88,34 @@ func inferMediaInfo(videoPath string) valueobject.MediaInfo {
 
 func (s *ScanningService) Scan(ctx context.Context) error {
 	for _, dir := range s.resolveWatchDirs(ctx) {
+		logger.Debug("scanning directory: %s", dir)
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
+				if err != nil {
+					logger.Warn("walk error for %s: %v", path, err)
+				}
 				return nil
 			}
 
 			ext := filepath.Ext(path)
 			if ext != ".mkv" && ext != ".mp4" {
+				logger.Debug("skip non-video: %s", path)
 				return nil
 			}
 
 			hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, path)
-			if err != nil || hasTr {
+			if err != nil {
+				logger.Warn("HasTurkishSubtitle error for %s: %v", path, err)
+				return nil
+			}
+			if hasTr {
+				logger.Info("has Turkish subtitle, skipping: %s", path)
 				return nil
 			}
 
 			engPath, err := s.videoProcessor.EnsureEngSubtitle(ctx, path)
 			if err != nil {
+				logger.Warn("EnsureEngSubtitle failed for %s: %v", path, err)
 				return nil
 			}
 
@@ -117,6 +128,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 					valueobject.StatusDone,
 					valueobject.StatusEmbedded,
 					valueobject.StatusQuotaExhausted:
+					logger.Debug("existing subtitle status %s for %s: skip", string(status), engPath)
 					return nil
 				}
 			}
@@ -126,7 +138,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				if season, episode, ok := extractSxxExx(path); ok {
 					candidates, dbErr := s.subtitleRepo.FindBySxxExx(ctx, season, episode)
 					if dbErr == nil && len(candidates) > 0 {
-						log.Printf("video relocated S%02dE%02d: %s", season, episode, path)
+						logger.Info("video relocated S%02dE%02d: %s", season, episode, path)
 						return nil
 					}
 				}
@@ -143,10 +155,18 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				EngPath:   engPath,
 				VideoPath: path,
 			}); err != nil {
+				logger.Error("enqueue failed for %s: %v", engPath, err)
 				return nil
 			}
 
-			return s.subtitleRepo.Save(ctx, subtitle)
+			logger.Info("enqueued translate_srt for %s", engPath)
+
+			if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
+				logger.Error("subtitle save failed for %s: %v", engPath, err)
+				return nil
+			}
+			logger.Debug("subtitle saved: %s", engPath)
+			return nil
 		})
 		if err != nil {
 			return err

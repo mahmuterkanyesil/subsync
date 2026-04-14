@@ -2,28 +2,32 @@ package main
 
 import (
 	"database/sql"
-	"log"
+	"os"
 
 	"subsync/internal/core/application/service"
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
 	"subsync/internal/infrastructure/adapter/queue/asynq"
 	"subsync/internal/infrastructure/adapter/rest/gin"
 	"subsync/pkg/config"
+	"subsync/pkg/logger"
 
 	_ "modernc.org/sqlite"
 )
 
 func main() {
 	cfg := config.Load()
+	logger.Init()
 
 	db, err := sql.Open("sqlite", cfg.StateDBPath)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	if err := sqlite.Migrate(db); err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
@@ -35,8 +39,9 @@ func main() {
 
 	server := gin.NewHTTPServer(statsService, cfg.APIPort)
 
-	log.Println("api started on port", cfg.APIPort)
+	logger.Info("api started on port %s", cfg.APIPort)
 	if err := server.Start(); err != nil {
-		log.Fatal(err)
+		logger.Error("%v", err)
+		os.Exit(1)
 	}
 }
