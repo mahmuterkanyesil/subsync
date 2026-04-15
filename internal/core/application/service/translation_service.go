@@ -48,6 +48,9 @@ func (s *TranslationService) publish(e event.DomainEvent) {
 }
 
 func (s *TranslationService) Translate(ctx context.Context, engPath string) error {
+	// Reset any RPD quotas that have passed their reset time before attempting translation.
+	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
+
 	subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
 	if err != nil {
 		return err
