@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -178,7 +177,7 @@ func httpPost(url, contentType string, body []byte) ([]byte, error) {
 }
 
 func ioReadAll(r io.Reader) ([]byte, error) {
-    return ioutil.ReadAll(r)
+    return io.ReadAll(r)
 }
 
 // GetRecent returns up to n recent log entries (newest last)

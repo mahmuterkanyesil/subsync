@@ -11,10 +11,9 @@ DATA_DIR=${DATA_DIR:-$PWD/data}
 PROGRESS_DIR="$DATA_DIR/progress"
 mkdir -p "$PROGRESS_DIR"
 
-# Start compose (use existing docker-compose.yml)
-docker compose up -d --build
-
 # wait for api health
+# Note: compose is expected to already be running (started by CI or caller).
+# For local standalone use: run `docker compose up -d --build` before this script.
 echo "Waiting for API health..."
 for i in {1..30}; do
   if curl -fs http://localhost:8080/health >/dev/null 2>&1; then

@@ -13,7 +13,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - STATE_DB_PATH=/data/state.db
       - PROGRESS_DIR=/data/progress
-      - WATCH_DIRS=/tv:/movies
+      - WATCH_DIRS=${WATCH_DIRS:-/tv:/movies}
       - SCAN_INTERVAL_SEC=30
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
       - LOG_LEVEL=debug
@@ -85,6 +85,7 @@ services:
       - STATE_DB_PATH=/data/state.db
       - REDIS_URL=redis://redis:6379/0
       - API_PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-info}
     ports:
       - "8080:8080"
     volumes:
