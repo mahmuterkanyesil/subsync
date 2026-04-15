@@ -221,9 +221,6 @@ func TestTranslationService_Translate_QuotaExhaustedRPD_TransitionsToQuotaExhaus
 	defer translator.AssertExpectations(t)
 	defer progressStore.AssertExpectations(t)
 
-	key1, _ := entity.NewAPIKey("gemini", "key-1")
-	key2, _ := entity.NewAPIKey("gemini", "key-2")
-	key3, _ := entity.NewAPIKey("gemini", "key-3")
 	quotaErr := errors.New("quota_exhausted_rpd")
 
 	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
@@ -231,17 +228,13 @@ func TestTranslationService_Translate_QuotaExhaustedRPD_TransitionsToQuotaExhaus
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key1, nil).Once()
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key2, nil).Once()
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key3, nil).Once()
-
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), "key-1").Return(nil, quotaErr)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), "key-2").Return(nil, quotaErr)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), "key-3").Return(nil, quotaErr)
-
-	keyRepo.On("Save", mock.Anything, key1).Return(nil)
-	keyRepo.On("Save", mock.Anything, key2).Return(nil)
-	keyRepo.On("Save", mock.Anything, key3).Return(nil)
+	// maxRetry = 10: set up 10 keys all returning quota_exhausted_rpd
+	for i := 1; i <= 10; i++ {
+		k, _ := entity.NewAPIKey("gemini", fmt.Sprintf("key-%d", i))
+		keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(k, nil).Once()
+		translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), fmt.Sprintf("key-%d", i)).Return(nil, quotaErr)
+		keyRepo.On("Save", mock.Anything, k).Return(nil)
+	}
 
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 

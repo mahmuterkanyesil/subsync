@@ -148,6 +148,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 
 			subtitle, err := entity.NewSubtitle(mediaInfo, engPath)
 			if err != nil {
+				logger.Error("failed to create subtitle entity for %s: %v", engPath, err)
 				return nil
 			}
 

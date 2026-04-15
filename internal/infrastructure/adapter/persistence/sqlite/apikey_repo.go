@@ -18,23 +18,25 @@ func NewSQLiteAPIKeyRepository(db *sql.DB) *SQLiteAPIKeyRepository {
 func (r *SQLiteAPIKeyRepository) Save(ctx context.Context, k *entity.APIKey) error {
 	now := time.Now()
 	if k.ID() == 0 {
-		query := `INSERT INTO api_keys (service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		query := `INSERT INTO api_keys (service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err := r.db.ExecContext(ctx, query,
-			k.Service(), k.KeyValue(), k.IsActive(), k.IsQuotaExceeded(),
-			k.QuotaResetTime(), k.RequestMade(), k.LastUsedAt(), k.LastError(), now, now,
+			k.Service(), k.KeyValue(), k.Model(), k.IsActive(), k.IsQuotaExceeded(),
+			k.QuotaResetTime(), k.RPMLimit(), k.TPMLimit(), k.RPDLimit(),
+			k.RequestMade(), k.LastUsedAt(), k.LastError(), now, now,
 		)
 		return err
 	}
-	query := `UPDATE api_keys SET is_active=?, is_quota_exceeded=?, quota_reset_time=?, request_made=?, last_used_at=?, last_error=?, updated_at=? WHERE id=?`
+	query := `UPDATE api_keys SET is_active=?, is_quota_exceeded=?, quota_reset_time=?, rpm_limit=?, tpm_limit=?, rpd_limit=?, request_made=?, last_used_at=?, last_error=?, updated_at=? WHERE id=?`
 	_, err := r.db.ExecContext(ctx, query,
 		k.IsActive(), k.IsQuotaExceeded(), k.QuotaResetTime(),
+		k.RPMLimit(), k.TPMLimit(), k.RPDLimit(),
 		k.RequestMade(), k.LastUsedAt(), k.LastError(), now, k.ID(),
 	)
 	return err
 }
 
 func (r *SQLiteAPIKeyRepository) FindByID(ctx context.Context, id int) (*entity.APIKey, error) {
-	query := `SELECT id, service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys WHERE id = ?`
+	query := `SELECT id, service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys WHERE id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, id)
 	return scanAPIKey(row)
@@ -43,7 +45,7 @@ func (r *SQLiteAPIKeyRepository) FindByID(ctx context.Context, id int) (*entity.
 func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error) {
 	_ = r.ResetExpiredQuotas(ctx)
 	query := `
-		SELECT id, service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at
+		SELECT id, service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at
 		FROM api_keys
 		WHERE service = ? AND is_active = 1 AND is_quota_exceeded = 0
 		ORDER BY last_used_at ASC
@@ -65,7 +67,7 @@ func (r *SQLiteAPIKeyRepository) ResetExpiredQuotas(ctx context.Context) error {
 }
 
 func (r *SQLiteAPIKeyRepository) FindAll(ctx context.Context) ([]*entity.APIKey, error) {
-	query := `SELECT id, service, key_value, is_active, is_quota_exceeded, quota_reset_time, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys ORDER BY id ASC`
+	query := `SELECT id, service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys ORDER BY id ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -88,14 +90,14 @@ func (r *SQLiteAPIKeyRepository) Delete(ctx context.Context, id int) error {
 }
 
 func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
-	var id, requestMade int
-	var service, keyValue, lastError string
+	var id, rpmLimit, tpmLimit, rpdLimit, requestMade int
+	var service, keyValue, model, lastError string
 	var isActive, isQuotaExceeded bool
 	var quotaResetTimeStr sql.NullString
 	var lastUsedAtStr sql.NullString
 	var createdAtStr, updatedAtStr sql.NullString
 
-	err := rows.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
+	err := rows.Scan(&id, &service, &keyValue, &model, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &rpmLimit, &tpmLimit, &rpdLimit, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
 	if err != nil {
 		return nil, err
 	}
@@ -104,18 +106,18 @@ func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
 	lsu := parseTimePtr(lastUsedAtStr)
 	ca := parseTime(createdAtStr)
 	ua := parseTime(updatedAtStr)
-	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, qrt, requestMade, lsu, lastError, ca, ua)
+	return entity.RestoreAPIKey(id, service, keyValue, model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
 }
 
 func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
-	var id, requestMade int
-	var service, keyValue, lastError string
+	var id, rpmLimit, tpmLimit, rpdLimit, requestMade int
+	var service, keyValue, model, lastError string
 	var isActive, isQuotaExceeded bool
 	var quotaResetTimeStr sql.NullString
 	var lastUsedAtStr sql.NullString
 	var createdAtStr, updatedAtStr sql.NullString
 
-	err := row.Scan(&id, &service, &keyValue, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
+	err := row.Scan(&id, &service, &keyValue, &model, &isActive, &isQuotaExceeded, &quotaResetTimeStr, &rpmLimit, &tpmLimit, &rpdLimit, &requestMade, &lastUsedAtStr, &lastError, &createdAtStr, &updatedAtStr)
 	if err != nil {
 		return nil, err
 	}
@@ -124,5 +126,5 @@ func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 	lsu := parseTimePtr(lastUsedAtStr)
 	ca := parseTime(createdAtStr)
 	ua := parseTime(updatedAtStr)
-	return entity.RestoreAPIKey(id, service, keyValue, isActive, isQuotaExceeded, qrt, requestMade, lsu, lastError, ca, ua)
+	return entity.RestoreAPIKey(id, service, keyValue, model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
 }

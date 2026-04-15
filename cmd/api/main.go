@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"subsync/internal/core/application/service"
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
@@ -39,8 +42,11 @@ func main() {
 
 	server := gin.NewHTTPServer(statsService, cfg.APIPort)
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	logger.Info("api started on port %s", cfg.APIPort)
-	if err := server.Start(); err != nil {
+	if err := server.Start(ctx); err != nil {
 		logger.Error("%v", err)
 		os.Exit(1)
 	}

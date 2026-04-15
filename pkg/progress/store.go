@@ -3,6 +3,8 @@ package progress
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"subsync/internal/core/application/port"
@@ -18,8 +20,10 @@ func NewFileProgressStore(dir string) *FileProgressStore {
 }
 
 func (s *FileProgressStore) progressPath(engPath string) string {
-	hash := filepath.Base(engPath)
-	return filepath.Join(s.dir, hash+".json")
+	h := fnv.New32a()
+	h.Write([]byte(engPath))
+	base := filepath.Base(engPath)
+	return filepath.Join(s.dir, fmt.Sprintf("%s_%08x.json", base, h.Sum32()))
 }
 
 func (s *FileProgressStore) Save(ctx context.Context, engPath string, blocks []port.SRTBlock) error {

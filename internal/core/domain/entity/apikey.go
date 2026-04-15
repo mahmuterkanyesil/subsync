@@ -9,11 +9,15 @@ type APIKey struct {
 	id       int
 	service  string
 	keyValue string
+	model    string
 
 	isActive        bool
 	isQuotaExceeded bool
 	quotaResetTime  *time.Time
 
+	rpmLimit    int
+	tpmLimit    int
+	rpdLimit    int
 	requestMade int
 	lastUsedAt  *time.Time
 	lastError   string
@@ -32,7 +36,11 @@ func NewAPIKey(service string, keyValue string) (*APIKey, error) {
 	return &APIKey{
 		service:   service,
 		keyValue:  keyValue,
+		model:     service,
 		isActive:  true,
+		rpmLimit:  15,
+		tpmLimit:  1000000,
+		rpdLimit:  1500,
 		createdAt: time.Now(),
 		updatedAt: time.Now(),
 	}, nil
@@ -40,9 +48,10 @@ func NewAPIKey(service string, keyValue string) (*APIKey, error) {
 
 func RestoreAPIKey(
 	id int,
-	service, keyValue string,
+	service, keyValue, model string,
 	isActive, isQuotaExceeded bool,
 	quotaResetTime *time.Time,
+	rpmLimit, tpmLimit, rpdLimit int,
 	requestMade int,
 	lastUsedAt *time.Time,
 	lastError string,
@@ -58,9 +67,13 @@ func RestoreAPIKey(
 		id:              id,
 		service:         service,
 		keyValue:        keyValue,
+		model:           model,
 		isActive:        isActive,
 		isQuotaExceeded: isQuotaExceeded,
 		quotaResetTime:  quotaResetTime,
+		rpmLimit:        rpmLimit,
+		tpmLimit:        tpmLimit,
+		rpdLimit:        rpdLimit,
 		requestMade:     requestMade,
 		lastUsedAt:      lastUsedAt,
 		lastError:       lastError,
@@ -79,6 +92,22 @@ func (a *APIKey) Service() string {
 
 func (a *APIKey) KeyValue() string {
 	return a.keyValue
+}
+
+func (a *APIKey) Model() string {
+	return a.model
+}
+
+func (a *APIKey) RPMLimit() int {
+	return a.rpmLimit
+}
+
+func (a *APIKey) TPMLimit() int {
+	return a.tpmLimit
+}
+
+func (a *APIKey) RPDLimit() int {
+	return a.rpdLimit
 }
 
 func (a *APIKey) IsActive() bool {

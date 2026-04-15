@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"subsync/internal/core/application/service"
@@ -38,11 +41,19 @@ func main() {
 
 	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs, watchDirRepo)
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	logger.Info("agent started")
 	for {
-		if err := scanner.Scan(context.Background()); err != nil {
+		if err := scanner.Scan(ctx); err != nil {
 			logger.Error("scan error: %v", err)
 		}
-		time.Sleep(time.Duration(cfg.ScanIntervalSec) * time.Second)
+		select {
+		case <-ctx.Done():
+			logger.Info("agent shutting down")
+			return
+		case <-time.After(time.Duration(cfg.ScanIntervalSec) * time.Second):
+		}
 	}
 }

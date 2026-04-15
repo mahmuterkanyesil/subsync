@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"subsync/internal/core/application/service"
+	eventadapter "subsync/internal/infrastructure/adapter/event"
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
 	"subsync/internal/infrastructure/adapter/queue/asynq"
 	"subsync/internal/infrastructure/adapter/translation/gemini"
@@ -43,7 +44,7 @@ func main() {
 		apiKeyRepo,
 		translator,
 		progressStore,
-		nil, // EventPublisher — ileride bağlanabilir
+		eventadapter.NewLogEventPublisher(),
 		cfg.BatchSize,
 	)
 

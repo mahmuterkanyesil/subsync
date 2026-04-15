@@ -109,8 +109,9 @@ func TestRestoreAPIKey_Valid(t *testing.T) {
 	resetTime := now.Add(24 * time.Hour)
 
 	k, err := entity.RestoreAPIKey(
-		7, "gemini", "secret-key",
+		7, "gemini", "secret-key", "gemini",
 		true, true, &resetTime,
+		15, 1000000, 1500,
 		42, &now, "some error",
 		now, now,
 	)
@@ -126,11 +127,11 @@ func TestRestoreAPIKey_Valid(t *testing.T) {
 }
 
 func TestRestoreAPIKey_EmptyService_ReturnsError(t *testing.T) {
-	_, err := entity.RestoreAPIKey(1, "", "key", false, false, nil, 0, nil, "", time.Now(), time.Now())
+	_, err := entity.RestoreAPIKey(1, "", "key", "gemini", false, false, nil, 15, 1000000, 1500, 0, nil, "", time.Now(), time.Now())
 	require.Error(t, err)
 }
 
 func TestRestoreAPIKey_EmptyKeyValue_ReturnsError(t *testing.T) {
-	_, err := entity.RestoreAPIKey(1, "gemini", "", false, false, nil, 0, nil, "", time.Now(), time.Now())
+	_, err := entity.RestoreAPIKey(1, "gemini", "", "gemini", false, false, nil, 15, 1000000, 1500, 0, nil, "", time.Now(), time.Now())
 	require.Error(t, err)
 }

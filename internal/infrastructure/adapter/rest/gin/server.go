@@ -1,11 +1,14 @@
 package gin
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"html/template"
+	"net/http"
 	"path/filepath"
 	"subsync/internal/core/application/port"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,7 +76,7 @@ func NewHTTPServer(statsUseCase port.StatsUseCase, port string) *HTTPServer {
 	}
 }
 
-func (s *HTTPServer) Start() error {
+func (s *HTTPServer) Start(ctx context.Context) error {
 	r := gin.Default()
 
 	api := r.Group("/api")
@@ -111,7 +114,26 @@ func (s *HTTPServer) Start() error {
 	r.POST("/settings/dirs/:id/toggle", s.webToggleWatchDir)
 	r.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
 
-	return r.Run(":" + s.port)
+	srv := &http.Server{
+		Addr:    ":" + s.port,
+		Handler: r,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	}
 }
 
 // ─── shared helpers ───────────────────────────────────────────────────────────

@@ -2,7 +2,6 @@ package progress_test
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -120,10 +119,15 @@ func TestFileProgressStore_Load_InvalidJSON_ReturnsError(t *testing.T) {
 	store := progress.NewFileProgressStore(dir)
 	engPath := "/media/corrupted.eng.srt"
 
-	// Manually write invalid JSON to the progress file
-	progressFile := filepath.Join(dir, filepath.Base(engPath)+".json")
-	err := os.WriteFile(progressFile, []byte("not valid json {{"), 0644)
+	// Save valid data first so the store creates the hashed progress file
+	require.NoError(t, store.Save(ctx, engPath, makeBlocks(1)))
+
+	// Find the created file and overwrite with invalid JSON
+	entries, err := os.ReadDir(dir)
 	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	progressFile := filepath.Join(dir, entries[0].Name())
+	require.NoError(t, os.WriteFile(progressFile, []byte("not valid json {{"), 0644))
 
 	_, _, err = store.Load(ctx, engPath)
 	assert.Error(t, err)
@@ -152,20 +156,19 @@ func TestFileProgressStore_MultipleFiles_AreIsolated(t *testing.T) {
 	assert.Equal(t, blocks2, loaded2)
 }
 
-func TestFileProgressStore_ProgressPath_UsesBaseName(t *testing.T) {
-	// Two paths with same basename should map to same progress file
+func TestFileProgressStore_ProgressPath_DifferentDirs_AreIsolated(t *testing.T) {
+	// Two paths with same basename but different directories must map to different files
 	ctx := context.Background()
 	store := newStore(t)
 
 	path1 := "/dir1/movie.eng.srt"
 	path2 := "/dir2/movie.eng.srt"
-	blocks := []valueobject.SRTBlock{{Index: 1, Timestamp: "ts", Text: "Same base"}}
+	blocks := []valueobject.SRTBlock{{Index: 1, Timestamp: "ts", Text: "Path1 content"}}
 
 	require.NoError(t, store.Save(ctx, path1, blocks))
 
-	// Loading with a different directory but same basename
-	loaded, found, err := store.Load(ctx, path2)
+	// Loading path2 (same basename, different dir) must NOT find path1's progress
+	_, found, err := store.Load(ctx, path2)
 	require.NoError(t, err)
-	assert.True(t, found, "same basename should map to same progress file")
-	_, _ = json.Marshal(loaded) // just verify it's valid
+	assert.False(t, found, "different full paths should map to different progress files even if basename matches")
 }

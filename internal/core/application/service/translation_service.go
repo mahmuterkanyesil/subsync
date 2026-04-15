@@ -77,7 +77,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 	remaining := blocks[len(translated):]
 	retryCount := 0
-	maxRetry := 3
+	maxRetry := 10
 
 	for i := 0; i < len(remaining); {
 		end := i + s.batchSize
@@ -141,6 +141,13 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			case <-time.After(10 * time.Second):
 			}
 		}
+	}
+
+	// SRT block structure validation
+	if err := domainservice.ValidateTranslation(blocks, translated); err != nil {
+		_ = subtitle.TransitionTo(valueobject.StatusError)
+		_ = s.subtitleRepo.Save(ctx, subtitle)
+		return fmt.Errorf("srt validation failed: %w", err)
 	}
 
 	// Domain service ile doğrula

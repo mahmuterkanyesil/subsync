@@ -71,9 +71,13 @@ func toStatsResponse(stats port.SubtitleStats) StatsResponse {
 type APIKeyResponse struct {
 	ID              int    `json:"id"`
 	Service         string `json:"service"`
+	Model           string `json:"model"`
 	IsActive        bool   `json:"is_active"`
 	IsQuotaExceeded bool   `json:"is_quota_exceeded"`
 	QuotaResetTime  string `json:"quota_reset_time,omitempty"`
+	RPMLimit        int    `json:"rpm_limit"`
+	TPMLimit        int    `json:"tpm_limit"`
+	RPDLimit        int    `json:"rpd_limit"`
 	RequestMade     int    `json:"request_made"`
 	LastUsedAt      string `json:"last_used_at,omitempty"`
 	LastError       string `json:"last_error,omitempty"`
@@ -84,8 +88,12 @@ func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
 	r := APIKeyResponse{
 		ID:              k.ID(),
 		Service:         k.Service(),
+		Model:           k.Model(),
 		IsActive:        k.IsActive(),
 		IsQuotaExceeded: k.IsQuotaExceeded(),
+		RPMLimit:        k.RPMLimit(),
+		TPMLimit:        k.TPMLimit(),
+		RPDLimit:        k.RPDLimit(),
 		RequestMade:     k.RequestMade(),
 		LastError:       k.LastError(),
 		CreatedAt:       k.CreatedAt().Format("2006-01-02 15:04"),
