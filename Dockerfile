@@ -1,7 +1,7 @@
 # Stage 1 — Build
 # $BUILDPLATFORM = runner'ın native platformu (her zaman amd64 on GitHub Actions)
 # Go cross-compilation ile $TARGETARCH için binary üretir — QEMU gereksiz
-FROM --platform=$BUILDPLATFORM golang:1.25rc3-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
@@ -22,7 +22,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o bin/agent ./
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates curl procps \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
