@@ -7,19 +7,16 @@ ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
 ENV GOTOOLCHAIN=auto
-ENV CGO_ENABLED=0
-ENV GOOS=$TARGETOS
-ENV GOARCH=$TARGETARCH
 
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN go build -o bin/agent ./cmd/agent && \
-    go build -o bin/worker ./cmd/worker && \
-    go build -o bin/embedder ./cmd/embedder && \
-    go build -o bin/api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o bin/agent ./cmd/agent && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o bin/worker ./cmd/worker && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o bin/embedder ./cmd/embedder && \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o bin/api ./cmd/api
 
 # Stage 2 — Run
 FROM debian:bookworm-slim
