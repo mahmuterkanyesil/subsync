@@ -105,17 +105,17 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 
 			hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, path)
 			if err != nil {
-				logger.Warn("HasTurkishSubtitle error for %s: %v", path, err)
+				logger.Warn("ffprobe check failed: %s — %v", filepath.Base(path), err)
 				return nil
 			}
 			if hasTr {
-				logger.Info("has Turkish subtitle, skipping: %s", path)
+				logger.Info("skip (has TR sub): %s", filepath.Base(path))
 				return nil
 			}
 
 			engPath, err := s.videoProcessor.EnsureEngSubtitle(ctx, path)
 			if err != nil {
-				logger.Warn("EnsureEngSubtitle failed for %s: %v", path, err)
+				logger.Warn("sub extract failed: %s — %v", filepath.Base(path), err)
 				return nil
 			}
 
@@ -138,7 +138,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				if season, episode, ok := extractSxxExx(path); ok {
 					candidates, dbErr := s.subtitleRepo.FindBySxxExx(ctx, season, episode)
 					if dbErr == nil && len(candidates) > 0 {
-						logger.Info("video relocated S%02dE%02d: %s", season, episode, path)
+						logger.Info("video relocated S%02dE%02d: %s", season, episode, filepath.Base(path))
 						return nil
 					}
 				}
@@ -148,7 +148,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 
 			subtitle, err := entity.NewSubtitle(mediaInfo, engPath)
 			if err != nil {
-				logger.Error("failed to create subtitle entity for %s: %v", engPath, err)
+				logger.Error("subtitle entity failed: %s — %v", filepath.Base(engPath), err)
 				return nil
 			}
 
@@ -156,11 +156,11 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				EngPath:   engPath,
 				VideoPath: path,
 			}); err != nil {
-				logger.Error("enqueue failed for %s: %v", engPath, err)
+				logger.Error("enqueue failed: %s — %v", filepath.Base(engPath), err)
 				return nil
 			}
 
-			logger.Info("enqueued translate_srt for %s", engPath)
+			logger.Info("queued translate: %s", filepath.Base(engPath))
 
 			if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
 				logger.Error("subtitle save failed for %s: %v", engPath, err)

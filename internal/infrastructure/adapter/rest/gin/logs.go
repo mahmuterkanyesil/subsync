@@ -27,7 +27,12 @@ func (s *HTTPServer) apiLogs(c *gin.Context) {
 	entries := logger.GetRecent(limit)
 	out := make([]gin.H, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, gin.H{"time": e.Time.Format("2006-01-02T15:04:05Z"), "level": e.Level, "message": e.Message})
+		out = append(out, gin.H{
+			"time":    e.Time.Format("15:04:05"),
+			"level":   e.Level,
+			"service": e.Service,
+			"message": e.Message,
+		})
 	}
 	c.JSON(http.StatusOK, out)
 }
@@ -36,6 +41,7 @@ func (s *HTTPServer) receiveLog(c *gin.Context) {
 	var body struct {
 		Time    string `json:"time"`
 		Level   string `json:"level"`
+		Service string `json:"service"`
 		Message string `json:"message"`
 	}
 	if err := c.BindJSON(&body); err != nil {
@@ -48,7 +54,7 @@ func (s *HTTPServer) receiveLog(c *gin.Context) {
 			t = parsed
 		}
 	}
-	logger.ReceiveRemote(t, body.Level, body.Message)
+	logger.ReceiveRemote(t, body.Service, body.Level, body.Message)
 	c.Status(http.StatusNoContent)
 }
 

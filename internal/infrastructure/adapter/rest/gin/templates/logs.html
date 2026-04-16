@@ -1,32 +1,180 @@
 {{define "content"}}
+<style>
+.log-wrap {
+    height: 65vh;
+    overflow: auto;
+    background: #0b1220;
+    padding: 0.75rem 1rem;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+    font-size: 0.82rem;
+    line-height: 1.6;
+}
+.log-line {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    padding: 1px 0;
+    border-bottom: 1px solid #111827;
+}
+.log-line:last-child { border-bottom: none; }
+.log-time  { color: #4b5563; min-width: 56px; flex-shrink: 0; }
+.log-svc   {
+    display: inline-block;
+    min-width: 72px;
+    text-align: center;
+    padding: 0 6px;
+    border-radius: 3px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    letter-spacing: 0.03em;
+}
+.log-lvl   { min-width: 44px; font-weight: 700; flex-shrink: 0; }
+.log-msg   { word-break: break-all; color: #cbd5e1; }
+
+/* Level colours */
+.lvl-info  { color: #60a5fa; }
+.lvl-warn  { color: #fbbf24; }
+.lvl-error { color: #f87171; }
+.lvl-debug { color: #6b7280; }
+
+/* Service badge colours */
+.svc-agent    { background: #2e1a6e; color: #c4b5fd; }
+.svc-worker   { background: #1e3a6e; color: #93c5fd; }
+.svc-embedder { background: #064e3b; color: #6ee7b7; }
+.svc-api      { background: #7c2d12; color: #fdba74; }
+.svc-unknown  { background: #1f2937; color: #9ca3af; }
+
+/* Filter bar */
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+.filter-label {
+    color: #6b7280;
+    font-size: 0.78rem;
+    margin-right: 0.1rem;
+}
+.filter-sep { width: 1px; height: 20px; background: #374151; margin: 0 0.3rem; }
+.fbtn {
+    padding: 2px 10px;
+    border-radius: 4px;
+    border: 1px solid #374151;
+    background: #111827;
+    color: #6b7280;
+    cursor: pointer;
+    font-size: 0.76rem;
+    font-family: inherit;
+    transition: border-color 0.12s, color 0.12s;
+}
+.fbtn:hover { border-color: #6b7280; color: #d1d5db; }
+.fbtn.active-all    { border-color: #4b5563; color: #d1d5db; background: #1f2937; }
+.fbtn.active-info   { border-color: #3b82f6; color: #60a5fa; background: #1e3a6e22; }
+.fbtn.active-warn   { border-color: #d97706; color: #fbbf24; background: #78350f22; }
+.fbtn.active-error  { border-color: #dc2626; color: #f87171; background: #7f1d1d22; }
+.fbtn.active-debug  { border-color: #4b5563; color: #9ca3af; background: #11182722; }
+.fbtn.active-agent    { border-color: #7c3aed; color: #c4b5fd; background: #2e1a6e22; }
+.fbtn.active-worker   { border-color: #2563eb; color: #93c5fd; background: #1e3a6e22; }
+.fbtn.active-embedder { border-color: #059669; color: #6ee7b7; background: #064e3b22; }
+.fbtn.active-api      { border-color: #ea580c; color: #fdba74; background: #7c2d1222; }
+</style>
+
 <div class="card">
-    <h1>Logs</h1>
-    <p style="margin-bottom:1rem;color:#6b7280">Live console logs from services (in-memory, not persisted).</p>
-    <div class="card"
-        style="height:60vh;overflow:auto;font-family:monospace;white-space:pre-wrap;background:#0b1220;color:#e6eef8;padding:1rem;">
-        <div id="log-lines">Loading...</div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+        <h1 style="margin:0">Logs</h1>
+        <span style="color:#6b7280; font-size:0.82rem;" id="log-count">—</span>
+    </div>
+
+    <div class="filters" id="filters">
+        <span class="filter-label">Level</span>
+        <button class="fbtn active-all"  data-g="level" data-v="all">all</button>
+        <button class="fbtn"             data-g="level" data-v="info">INFO</button>
+        <button class="fbtn"             data-g="level" data-v="warn">WARN</button>
+        <button class="fbtn"             data-g="level" data-v="error">ERROR</button>
+        <button class="fbtn"             data-g="level" data-v="debug">DEBUG</button>
+        <div class="filter-sep"></div>
+        <span class="filter-label">Service</span>
+        <button class="fbtn active-all"  data-g="service" data-v="all">all</button>
+        <button class="fbtn"             data-g="service" data-v="agent">agent</button>
+        <button class="fbtn"             data-g="service" data-v="worker">worker</button>
+        <button class="fbtn"             data-g="service" data-v="embedder">embedder</button>
+        <button class="fbtn"             data-g="service" data-v="api">api</button>
+    </div>
+
+    <div class="log-wrap" id="log-wrap">
+        <div id="log-lines" style="color:#4b5563;">Loading…</div>
     </div>
 </div>
 
 <script>
-    async function fetchLogs() {
-        try {
-            const res = await fetch('/api/logs?limit=500');
-            const data = await res.json();
-            const container = document.getElementById('log-lines');
-            container.innerHTML = '';
-            data.forEach(e => {
-                const el = document.createElement('div');
-                el.textContent = `[${e.time}] ${e.level.toUpperCase()} ${e.message}`;
-                container.appendChild(el);
-            });
-            // scroll to bottom
-            container.parentElement.scrollTop = container.parentElement.scrollHeight;
-        } catch (err) {
-            console.error(err);
-        }
-    }
-    fetchLogs();
-    setInterval(fetchLogs, 3000);
+let levelFilter   = 'all';
+let serviceFilter = 'all';
+let allEntries    = [];
+
+const svcClass = s => ({ agent:'svc-agent', worker:'svc-worker', embedder:'svc-embedder', api:'svc-api' }[s] || 'svc-unknown');
+const lvlClass = l => 'lvl-' + l;
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function renderLogs() {
+    const container = document.getElementById('log-lines');
+    const wrap      = document.getElementById('log-wrap');
+    const atBottom  = wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 60;
+
+    const visible = allEntries.filter(e => {
+        if (levelFilter   !== 'all' && e.level             !== levelFilter)   return false;
+        if (serviceFilter !== 'all' && (e.service||'unknown') !== serviceFilter) return false;
+        return true;
+    });
+
+    document.getElementById('log-count').textContent =
+        visible.length + ' / ' + allEntries.length + ' entries · live';
+
+    const frag = document.createDocumentFragment();
+    visible.forEach(e => {
+        const svc  = e.service || 'unknown';
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.innerHTML =
+            `<span class="log-time">${esc(e.time)}</span>` +
+            `<span class="log-svc ${svcClass(svc)}">${esc(svc)}</span>` +
+            `<span class="log-lvl ${lvlClass(e.level)}">${e.level.toUpperCase()}</span>` +
+            `<span class="log-msg">${esc(e.message)}</span>`;
+        frag.appendChild(line);
+    });
+
+    container.innerHTML = '';
+    container.appendChild(frag);
+    if (atBottom) wrap.scrollTop = wrap.scrollHeight;
+}
+
+async function fetchLogs() {
+    try {
+        const res = await fetch('/api/logs?limit=500');
+        allEntries = await res.json();
+        renderLogs();
+    } catch(err) { console.error(err); }
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+    const btn = e.target.closest('[data-g]');
+    if (!btn) return;
+    const { g, v } = btn.dataset;
+
+    document.querySelectorAll(`[data-g="${g}"]`).forEach(b => {
+        b.className = 'fbtn';
+    });
+    btn.className = 'fbtn active-' + v;
+
+    if (g === 'level')   levelFilter   = v;
+    if (g === 'service') serviceFilter = v;
+    renderLogs();
+});
+
+fetchLogs();
+setInterval(fetchLogs, 3000);
 </script>
 {{end}}

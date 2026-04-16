@@ -46,7 +46,7 @@ func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath stri
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		logger.Warn("ffprobe failed for %s: %v", videoPath, err)
+		logger.Warn("ffprobe failed: %s — %v", filepath.Base(videoPath), err)
 		return false, err
 	}
 	output := strings.ToLower(string(out))
@@ -89,9 +89,9 @@ func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath strin
 		engPath,
 		"-y",
 	)
-	logger.Info("extracting subtitle stream %d from %s to %s", streamIndex, videoPath, engPath)
+	logger.Info("extract sub stream %d: %s", streamIndex, filepath.Base(videoPath))
 	if err := cmd.Run(); err != nil {
-		logger.Error("subtitle extraction failed for %s: %v", videoPath, err)
+		logger.Error("subtitle extract failed: %s — %v", filepath.Base(videoPath), err)
 		return "", fmt.Errorf("subtitle extraction failed: %w", err)
 	}
 
