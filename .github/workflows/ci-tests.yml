@@ -37,7 +37,7 @@ jobs:
           echo "TV_DIR=$GITHUB_WORKSPACE/tv" >> $GITHUB_ENV
           echo "MOVIES_DIR=$GITHUB_WORKSPACE/movies" >> $GITHUB_ENV
       - name: Start compose
-        run: docker compose up -d --build
+        run: docker compose -f docker-compose.ci.yml up -d --build
       - name: Wait for API health
         run: |
           for i in {1..30}; do
@@ -50,7 +50,7 @@ jobs:
         run: bash tests/e2e/run-smoke.sh
       - name: Tear down
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.ci.yml down -v
 
   build-push:
     runs-on: ubuntu-latest

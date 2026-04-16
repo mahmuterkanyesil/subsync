@@ -6,7 +6,7 @@ services:
       - redis_data:/data
 
   agent:
-    image: ghcr.io/mahmuterkanyesil/subsync:latest
+    build: .
     restart: unless-stopped
     command: ./bin/agent
     environment:
@@ -19,19 +19,13 @@ services:
       - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
+      - ${TV_DIR:-/tmp/tv}:/tv:ro
+      - ${MOVIES_DIR:-/tmp/movies}:/movies:ro
     depends_on:
       - redis
-    healthcheck:
-      test: [ "CMD-SHELL", "ps aux | grep /app/bin/agent | grep -v grep || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   worker:
-    image: ghcr.io/mahmuterkanyesil/subsync:latest
+    build: .
     restart: unless-stopped
     command: ./bin/worker
     environment:
@@ -44,41 +38,30 @@ services:
       - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
+      - ${TV_DIR:-/tmp/tv}:/tv:ro
+      - ${MOVIES_DIR:-/tmp/movies}:/movies:ro
     depends_on:
       - redis
-    healthcheck:
-      test: [ "CMD-SHELL", "ps aux | grep /app/bin/worker | grep -v grep || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   embedder:
-    image: ghcr.io/mahmuterkanyesil/subsync:latest
+    build: .
     restart: unless-stopped
     command: ./bin/embedder
     environment:
       - STATE_DB_PATH=/data/state.db
+      - PROGRESS_DIR=/data/progress
       - EMBED_INTERVAL_SEC=600
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
       - LOG_LEVEL=debug
     volumes:
       - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies
+      - ${TV_DIR:-/tmp/tv}:/tv
+      - ${MOVIES_DIR:-/tmp/movies}:/movies
     depends_on:
       - redis
-    healthcheck:
-      test: [ "CMD-SHELL", "ps aux | grep /app/bin/embedder | grep -v grep || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
   api:
-    image: ghcr.io/mahmuterkanyesil/subsync:latest
+    build: .
     restart: unless-stopped
     command: ./bin/api
     environment:
@@ -86,19 +69,13 @@ services:
       - PROGRESS_DIR=/data/progress
       - REDIS_URL=redis://redis:6379/0
       - API_PORT=8080
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=debug
     ports:
       - "8080:8080"
     volumes:
       - ${DATA_DIR:-./data}:/data
     depends_on:
       - redis
-    healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8080/health || exit 1" ]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
 
 volumes:
   redis_data:
