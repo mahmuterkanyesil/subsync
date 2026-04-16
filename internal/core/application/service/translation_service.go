@@ -88,8 +88,23 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
 		if err != nil {
-			_ = s.progress.Save(ctx, engPath, translated)
-			return fmt.Errorf("no available api key: %w", err)
+			resetAt, _ := s.apiKeyRepo.FindEarliestQuotaReset(ctx, "gemini")
+			if resetAt == nil {
+				_ = s.progress.Save(ctx, engPath, translated)
+				_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
+				_ = s.subtitleRepo.Save(ctx, subtitle)
+				return fmt.Errorf("no active api keys configured for service gemini")
+			}
+			wait := time.Until(*resetAt) + 30*time.Second
+			if wait < 0 {
+				wait = 30 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(wait):
+			}
+			continue
 		}
 
 		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue())
@@ -107,7 +122,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 			case strings.Contains(errStr, "quota_exhausted_rpd"),
 				strings.Contains(errStr, "quota_exhausted"):
-				apiKey.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour))
+				apiKey.MarkAsQuotaExceeded(time.Now().Add(24*time.Hour), err.Error())
 				_ = s.apiKeyRepo.Save(ctx, apiKey)
 				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 				_ = os.Remove(trPath)

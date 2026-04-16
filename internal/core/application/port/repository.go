@@ -2,6 +2,7 @@ package port
 
 import (
 	"context"
+	"time"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
 )
@@ -38,6 +39,7 @@ type APIKeyRepository interface {
 	Save(ctx context.Context, k *entity.APIKey) error
 	FindByID(ctx context.Context, id int) (*entity.APIKey, error)
 	FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error)
+	FindEarliestQuotaReset(ctx context.Context, service string) (*time.Time, error)
 	ResetExpiredQuotas(ctx context.Context) error
 	FindAll(ctx context.Context) ([]*entity.APIKey, error)
 	Delete(ctx context.Context, id int) error

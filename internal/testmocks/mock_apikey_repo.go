@@ -2,6 +2,7 @@ package testmocks
 
 import (
 	"context"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"subsync/internal/core/domain/entity"
@@ -41,6 +42,14 @@ func (m *MockAPIKeyRepository) FindAll(ctx context.Context) ([]*entity.APIKey, e
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*entity.APIKey), args.Error(1)
+}
+
+func (m *MockAPIKeyRepository) FindEarliestQuotaReset(ctx context.Context, service string) (*time.Time, error) {
+	args := m.Called(ctx, service)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*time.Time), args.Error(1)
 }
 
 func (m *MockAPIKeyRepository) Delete(ctx context.Context, id int) error {

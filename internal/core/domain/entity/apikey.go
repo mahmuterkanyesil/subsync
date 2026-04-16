@@ -149,9 +149,10 @@ func (a *APIKey) MarkAsUsed() {
 	a.updatedAt = now
 }
 
-func (a *APIKey) MarkAsQuotaExceeded(quotaResetTime time.Time) {
+func (a *APIKey) MarkAsQuotaExceeded(quotaResetTime time.Time, lastError string) {
 	a.isQuotaExceeded = true
 	a.quotaResetTime = &quotaResetTime
+	a.lastError = lastError
 	a.updatedAt = time.Now()
 }
 

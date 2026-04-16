@@ -233,7 +233,7 @@ func TestStatsService_ResetQuotaApiKey_ResetsAndSaves(t *testing.T) {
 	defer keyRepo.AssertExpectations(t)
 
 	key := makeAPIKey(t)
-	key.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour))
+	key.MarkAsQuotaExceeded(time.Now().Add(24*time.Hour), "")
 	require.True(t, key.IsQuotaExceeded())
 
 	keyRepo.On("FindByID", mock.Anything, 5).Return(key, nil)

@@ -84,6 +84,22 @@ func (r *SQLiteAPIKeyRepository) FindAll(ctx context.Context) ([]*entity.APIKey,
 	return keys, rows.Err()
 }
 
+func (r *SQLiteAPIKeyRepository) FindEarliestQuotaReset(ctx context.Context, service string) (*time.Time, error) {
+	query := `
+		SELECT MIN(quota_reset_time) FROM api_keys
+		WHERE service = ? AND is_active = 1 AND is_quota_exceeded = 1 AND quota_reset_time IS NOT NULL
+	`
+	var s sql.NullString
+	if err := r.db.QueryRowContext(ctx, query, service).Scan(&s); err != nil {
+		return nil, err
+	}
+	if !s.Valid {
+		return nil, nil
+	}
+	t := parseTime(s)
+	return &t, nil
+}
+
 func (r *SQLiteAPIKeyRepository) Delete(ctx context.Context, id int) error {
 	_, err := r.db.ExecContext(ctx, `DELETE FROM api_keys WHERE id = ?`, id)
 	return err

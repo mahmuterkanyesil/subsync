@@ -66,18 +66,19 @@ func TestAPIKey_MarkAsQuotaExceeded_SetsFields(t *testing.T) {
 	require.NoError(t, err)
 
 	resetTime := time.Now().Add(24 * time.Hour)
-	k.MarkAsQuotaExceeded(resetTime)
+	k.MarkAsQuotaExceeded(resetTime, "quota_exhausted_rpd: some error")
 
 	assert.True(t, k.IsQuotaExceeded())
 	require.NotNil(t, k.QuotaResetTime())
 	assert.WithinDuration(t, resetTime, *k.QuotaResetTime(), time.Second)
+	assert.Equal(t, "quota_exhausted_rpd: some error", k.LastError())
 }
 
 func TestAPIKey_ResetQuota_ClearsFields(t *testing.T) {
 	k, err := entity.NewAPIKey("gemini", "key-abc")
 	require.NoError(t, err)
 
-	k.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour))
+	k.MarkAsQuotaExceeded(time.Now().Add(24 * time.Hour), "")
 	require.True(t, k.IsQuotaExceeded())
 
 	k.ResetQuota()
