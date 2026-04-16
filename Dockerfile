@@ -3,8 +3,8 @@
 # Go cross-compilation ile $TARGETARCH için binary üretir — QEMU gereksiz
 FROM --platform=$BUILDPLATFORM golang:1.25rc3-alpine AS builder
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+ARG TARGETOS
+ARG TARGETARCH
 
 ENV GOTOOLCHAIN=auto
 

@@ -93,5 +93,4 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           file: ./Dockerfile
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
