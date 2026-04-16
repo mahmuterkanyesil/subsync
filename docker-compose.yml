@@ -13,14 +13,14 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - STATE_DB_PATH=/data/state.db
       - PROGRESS_DIR=/data/progress
-      - WATCH_DIRS=${WATCH_DIRS:-/tv:/movies}
+      - WATCH_DIRS=/tv:/movies
       - SCAN_INTERVAL_SEC=30
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=info
     volumes:
-      - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
+      - /DATA/AppData/subsync:/data
+      - /DATA/Media/TV:/tv:ro
+      - /DATA/Media/Movies:/movies:ro
     depends_on:
       - redis
     healthcheck:
@@ -41,11 +41,11 @@ services:
       - BATCH_SIZE=500
       - WORKER_CONCURRENCY=2
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=info
     volumes:
-      - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv:ro
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies:ro
+      - /DATA/AppData/subsync:/data
+      - /DATA/Media/TV:/tv:ro
+      - /DATA/Media/Movies:/movies:ro
     depends_on:
       - redis
     healthcheck:
@@ -61,13 +61,14 @@ services:
     command: ./bin/embedder
     environment:
       - STATE_DB_PATH=/data/state.db
+      - PROGRESS_DIR=/data/progress
       - EMBED_INTERVAL_SEC=600
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
-      - LOG_LEVEL=debug
+      - LOG_LEVEL=info
     volumes:
-      - ${DATA_DIR:-./data}:/data
-      - ${TV_DIR:-/home/mahmuterkanyesil/tv}:/tv
-      - ${MOVIES_DIR:-/home/mahmuterkanyesil/movies}:/movies
+      - /DATA/AppData/subsync:/data
+      - /DATA/Media/TV:/tv
+      - /DATA/Media/Movies:/movies
     depends_on:
       - redis
     healthcheck:
@@ -86,11 +87,11 @@ services:
       - PROGRESS_DIR=/data/progress
       - REDIS_URL=redis://redis:6379/0
       - API_PORT=8080
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_LEVEL=info
     ports:
       - "8080:8080"
     volumes:
-      - ${DATA_DIR:-./data}:/data
+      - /DATA/AppData/subsync:/data
     depends_on:
       - redis
     healthcheck:
