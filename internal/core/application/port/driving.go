@@ -24,7 +24,8 @@ type StatsUseCase interface {
 	FindByPath(ctx context.Context, engPath string) (*entity.Subtitle, error)
 	ReTranslate(ctx context.Context, engPath string) error
 	ReEmbed(ctx context.Context, engPath string) error
-	AddApiKey(ctx context.Context, service string, keyValue string) error
+	AddApiKey(ctx context.Context, service, keyValue, model string) error
+	UpdateApiKeyModel(ctx context.Context, id int, model string) error
 	DisableApiKey(ctx context.Context, id int) error
 	ResetQuotaApiKey(ctx context.Context, id int) error
 	ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error)

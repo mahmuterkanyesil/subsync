@@ -131,17 +131,11 @@ func restoreLineFormatting(translated string, lf lineFormatting) string {
 	return lf.opening + translated + lf.closing
 }
 
-type GeminiTranslator struct {
-	modelName string
-}
+type GeminiTranslator struct{}
 
-func NewGeminiTranslator() *GeminiTranslator {
-	return &GeminiTranslator{
-		modelName: "gemini-2.5-flash-lite",
-	}
-}
+func NewGeminiTranslator() *GeminiTranslator { return &GeminiTranslator{} }
 
-func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue string) ([]port.SRTBlock, error) {
+func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue, model string) ([]port.SRTBlock, error) {
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: keyValue})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
@@ -192,7 +186,7 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 	)
 
 	temperature := float32(0.3)
-	result, err := client.Models.GenerateContent(ctx, g.modelName, genai.Text(promptContent), &genai.GenerateContentConfig{
+	result, err := client.Models.GenerateContent(ctx, model, genai.Text(promptContent), &genai.GenerateContentConfig{
 		SystemInstruction: genai.NewContentFromText(systemInstruction, genai.RoleUser),
 		Temperature:       &temperature,
 	})

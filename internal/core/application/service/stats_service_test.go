@@ -194,20 +194,20 @@ func TestStatsService_AddApiKey_ValidInput_SavesCalled(t *testing.T) {
 	keyRepo.On("Save", mock.Anything, mock.AnythingOfType("*entity.APIKey")).Return(nil)
 
 	svc := newStatsService(&testmocks.MockSubtitleRepository{}, keyRepo, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
-	err := svc.AddApiKey(context.Background(), "gemini", "my-key")
+	err := svc.AddApiKey(context.Background(), "gemini", "my-key", "gemini-3.1-flash-lite")
 
 	require.NoError(t, err)
 }
 
 func TestStatsService_AddApiKey_EmptyService_ReturnsError(t *testing.T) {
 	svc := newStatsService(&testmocks.MockSubtitleRepository{}, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
-	err := svc.AddApiKey(context.Background(), "", "my-key")
+	err := svc.AddApiKey(context.Background(), "", "my-key", "")
 	assert.Error(t, err)
 }
 
 func TestStatsService_AddApiKey_EmptyKeyValue_ReturnsError(t *testing.T) {
 	svc := newStatsService(&testmocks.MockSubtitleRepository{}, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
-	err := svc.AddApiKey(context.Background(), "gemini", "")
+	err := svc.AddApiKey(context.Background(), "gemini", "", "")
 	assert.Error(t, err)
 }
 

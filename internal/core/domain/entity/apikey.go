@@ -36,11 +36,11 @@ func NewAPIKey(service string, keyValue string) (*APIKey, error) {
 	return &APIKey{
 		service:   service,
 		keyValue:  keyValue,
-		model:     service,
+		model:     "gemini-3.1-flash-lite",
 		isActive:  true,
 		rpmLimit:  15,
-		tpmLimit:  1000000,
-		rpdLimit:  1500,
+		tpmLimit:  250_000,
+		rpdLimit:  500,
 		createdAt: time.Now(),
 		updatedAt: time.Now(),
 	}, nil
@@ -169,5 +169,17 @@ func (a *APIKey) Deactivate() {
 
 func (a *APIKey) Activate() {
 	a.isActive = true
+	a.updatedAt = time.Now()
+}
+
+func (a *APIKey) SetModel(model string) {
+	a.model = model
+	a.updatedAt = time.Now()
+}
+
+func (a *APIKey) UpdateLimits(rpm, tpm, rpd int) {
+	a.rpmLimit = rpm
+	a.tpmLimit = tpm
+	a.rpdLimit = rpd
 	a.updatedAt = time.Now()
 }

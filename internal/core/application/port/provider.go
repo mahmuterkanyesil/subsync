@@ -22,7 +22,7 @@ var (
 )
 
 type TranslationProvider interface {
-	TranslateBatch(ctx context.Context, blocks []SRTBlock, key string) ([]SRTBlock, error)
+	TranslateBatch(ctx context.Context, blocks []SRTBlock, keyValue, model string) ([]SRTBlock, error)
 }
 
 type VideoProcessor interface {

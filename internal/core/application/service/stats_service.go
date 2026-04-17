@@ -7,6 +7,26 @@ import (
 	"subsync/internal/core/domain/valueobject"
 )
 
+type modelSpec struct{ rpm, tpm, rpd int }
+
+// knownModelSpecs maps Gemini model IDs to their free-tier rate limits.
+var knownModelSpecs = map[string]modelSpec{
+	"gemini-3.1-flash-lite": {rpm: 15, tpm: 250_000, rpd: 500},
+	"gemini-2.5-flash-lite": {rpm: 10, tpm: 250_000, rpd: 20},
+	"gemini-2.5-flash":      {rpm: 5, tpm: 250_000, rpd: 20},
+	"gemini-3-flash":        {rpm: 5, tpm: 250_000, rpd: 20},
+}
+
+func applyModel(key *entity.APIKey, model string) {
+	if model == "" {
+		return
+	}
+	key.SetModel(model)
+	if spec, ok := knownModelSpecs[model]; ok {
+		key.UpdateLimits(spec.rpm, spec.tpm, spec.rpd)
+	}
+}
+
 type StatsService struct {
 	subtitleRepo port.SubtitleRepository
 	apiKeyRepo   port.APIKeyRepository
@@ -72,11 +92,21 @@ func (s *StatsService) ReEmbed(ctx context.Context, engPath string) error {
 	return s.subtitleRepo.Save(ctx, subtitle)
 }
 
-func (s *StatsService) AddApiKey(ctx context.Context, service string, keyValue string) error {
+func (s *StatsService) AddApiKey(ctx context.Context, service, keyValue, model string) error {
 	key, err := entity.NewAPIKey(service, keyValue)
 	if err != nil {
 		return err
 	}
+	applyModel(key, model)
+	return s.apiKeyRepo.Save(ctx, key)
+}
+
+func (s *StatsService) UpdateApiKeyModel(ctx context.Context, id int, model string) error {
+	key, err := s.apiKeyRepo.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	applyModel(key, model)
 	return s.apiKeyRepo.Save(ctx, key)
 }
 

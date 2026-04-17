@@ -13,16 +13,33 @@ func (s *HTTPServer) addApiKey(c *gin.Context) {
 	var req struct {
 		Service  string `json:"service"`
 		KeyValue string `json:"key_value"`
+		Model    string `json:"model"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := s.statsUseCase.AddApiKey(c.Request.Context(), req.Service, req.KeyValue); err != nil {
+	if err := s.statsUseCase.AddApiKey(c.Request.Context(), req.Service, req.KeyValue, req.Model); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"status": "ok"})
+}
+
+func (s *HTTPServer) updateApiKeyModel(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	var req struct {
+		Model string `json:"model"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := s.statsUseCase.UpdateApiKeyModel(c.Request.Context(), id, req.Model); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
 func (s *HTTPServer) disableApiKey(c *gin.Context) {
@@ -80,7 +97,8 @@ func (s *HTTPServer) webKeys(c *gin.Context) {
 func (s *HTTPServer) webAddKey(c *gin.Context) {
 	service := c.PostForm("service")
 	keyValue := c.PostForm("key_value")
-	if err := s.statsUseCase.AddApiKey(c.Request.Context(), service, keyValue); err != nil {
+	model := c.PostForm("model")
+	if err := s.statsUseCase.AddApiKey(c.Request.Context(), service, keyValue, model); err != nil {
 		c.Redirect(http.StatusSeeOther, "/keys?flash=error&msg="+encodeMsg(err.Error()))
 		return
 	}
@@ -108,6 +126,16 @@ func (s *HTTPServer) webActivateKey(c *gin.Context) {
 func (s *HTTPServer) webDisableKey(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if err := s.statsUseCase.DisableApiKey(c.Request.Context(), id); err != nil {
+		c.Redirect(http.StatusSeeOther, "/keys?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/keys?flash=success")
+}
+
+func (s *HTTPServer) webUpdateKeyModel(c *gin.Context) {
+	id := parseID(c.Param("id"))
+	model := c.PostForm("model")
+	if err := s.statsUseCase.UpdateApiKeyModel(c.Request.Context(), id, model); err != nil {
 		c.Redirect(http.StatusSeeOther, "/keys?flash=error&msg="+encodeMsg(err.Error()))
 		return
 	}

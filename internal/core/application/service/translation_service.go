@@ -107,7 +107,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			continue
 		}
 
-		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue())
+		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), apiKey.Model())
 		if err != nil {
 			errStr := err.Error()
 			switch {

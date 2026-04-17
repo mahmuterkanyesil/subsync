@@ -11,8 +11,8 @@ type MockTranslationProvider struct {
 	mock.Mock
 }
 
-func (m *MockTranslationProvider) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, key string) ([]port.SRTBlock, error) {
-	args := m.Called(ctx, blocks, key)
+func (m *MockTranslationProvider) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue, model string) ([]port.SRTBlock, error) {
+	args := m.Called(ctx, blocks, keyValue, model)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

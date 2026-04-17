@@ -9,8 +9,14 @@
 <div class="card">
   <h2>Add New Key</h2>
   <form method="POST" action="/keys" class="form-inline">
-    <input type="text" name="service" placeholder="Service (e.g. gemini)" required style="width:180px">
-    <input type="password" name="key_value" placeholder="Key value" required style="width:320px">
+    <input type="text" name="service" value="gemini" placeholder="Service" required style="width:100px">
+    <input type="password" name="key_value" placeholder="API key" required style="width:300px">
+    <select name="model" required style="width:230px">
+      <option value="gemini-3.1-flash-lite" selected>gemini-3.1-flash-lite ★ (RPD 500)</option>
+      <option value="gemini-2.5-flash">gemini-2.5-flash (RPD 20)</option>
+      <option value="gemini-3-flash">gemini-3-flash (RPD 20)</option>
+      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite (RPD 20)</option>
+    </select>
     <button type="submit" class="btn btn-primary">Add Key</button>
   </form>
 </div>
@@ -22,11 +28,12 @@
         <tr>
           <th>ID</th>
           <th>Service</th>
+          <th>Model</th>
           <th>Status</th>
           <th>Quota</th>
+          <th>Limits (RPM/TPM/RPD)</th>
           <th>Requests</th>
           <th>Last Used</th>
-          <th>Created</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -35,6 +42,17 @@
         <tr>
           <td>{{.ID}}</td>
           <td>{{.Service}}</td>
+          <td>
+            <form method="POST" action="/keys/{{.ID}}/model" style="display:flex;gap:4px;align-items:center">
+              <select name="model" style="font-size:0.8rem;padding:2px 4px">
+                <option value="gemini-3.1-flash-lite" {{if eq .Model "gemini-3.1-flash-lite"}}selected{{end}}>3.1-flash-lite ★</option>
+                <option value="gemini-2.5-flash"      {{if eq .Model "gemini-2.5-flash"}}selected{{end}}>2.5-flash</option>
+                <option value="gemini-3-flash"         {{if eq .Model "gemini-3-flash"}}selected{{end}}>3-flash</option>
+                <option value="gemini-2.5-flash-lite"  {{if eq .Model "gemini-2.5-flash-lite"}}selected{{end}}>2.5-flash-lite</option>
+              </select>
+              <button type="submit" class="btn btn-secondary btn-sm" title="Save model">✓</button>
+            </form>
+          </td>
           <td>
             {{if .IsActive}}
               <span class="badge badge-active">Active</span>
@@ -50,9 +68,9 @@
               <span class="badge badge-ok">OK</span>
             {{end}}
           </td>
+          <td style="font-size:0.8rem;color:#9ca3af">{{.RPMLimit}} / {{.TPMLimit}} / {{.RPDLimit}}</td>
           <td>{{.RequestMade}}</td>
           <td>{{if .LastUsedAt}}{{.LastUsedAt}}{{else}}<span style="color:#9ca3af">—</span>{{end}}</td>
-          <td>{{.CreatedAt}}</td>
           <td style="white-space:nowrap">
             {{if .IsActive}}
             <form method="POST" action="/keys/{{.ID}}/disable" style="display:inline">
@@ -73,7 +91,7 @@
           </td>
         </tr>
         {{else}}
-        <tr><td colspan="8" style="text-align:center;color:#6b7280;padding:2rem;">No API keys configured.</td></tr>
+        <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:2rem;">No API keys configured.</td></tr>
         {{end}}
       </tbody>
     </table>
