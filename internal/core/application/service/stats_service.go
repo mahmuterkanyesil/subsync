@@ -133,7 +133,12 @@ func (s *StatsService) ResetQuotaApiKey(ctx context.Context, id int) error {
 }
 
 func (s *StatsService) ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error) {
+	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
 	return s.apiKeyRepo.FindAll(ctx)
+}
+
+func (s *StatsService) RefreshKeyStatuses(ctx context.Context) error {
+	return s.apiKeyRepo.ResetExpiredQuotas(ctx)
 }
 
 func (s *StatsService) DeleteAPIKey(ctx context.Context, id int) error {

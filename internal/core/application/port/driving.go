@@ -33,6 +33,7 @@ type StatsUseCase interface {
 	ActivateAPIKey(ctx context.Context, id int) error
 	ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 	DeleteSubtitle(ctx context.Context, engPath string) error
+	RefreshKeyStatuses(ctx context.Context) error
 	ListWatchDirs(ctx context.Context) ([]*entity.WatchDir, error)
 	AddWatchDir(ctx context.Context, path string) error
 	DeleteWatchDir(ctx context.Context, id int) error

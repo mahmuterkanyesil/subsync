@@ -281,6 +281,7 @@ func TestStatsService_ListAPIKeys_DelegatesToRepo(t *testing.T) {
 	defer keyRepo.AssertExpectations(t)
 
 	want := []*entity.APIKey{makeAPIKey(t)}
+	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
 	keyRepo.On("FindAll", mock.Anything).Return(want, nil)
 
 	svc := newStatsService(&testmocks.MockSubtitleRepository{}, keyRepo, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})

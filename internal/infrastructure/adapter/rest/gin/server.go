@@ -122,6 +122,19 @@ func (s *HTTPServer) Start(ctx context.Context) error {
 		Handler: r,
 	}
 
+	go func() {
+		ticker := time.NewTicker(10 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_ = s.statsUseCase.RefreshKeyStatuses(context.Background())
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
