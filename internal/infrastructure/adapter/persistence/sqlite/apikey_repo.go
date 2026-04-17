@@ -26,9 +26,9 @@ func (r *SQLiteAPIKeyRepository) Save(ctx context.Context, k *entity.APIKey) err
 		)
 		return err
 	}
-	query := `UPDATE api_keys SET is_active=?, is_quota_exceeded=?, quota_reset_time=?, rpm_limit=?, tpm_limit=?, rpd_limit=?, request_made=?, last_used_at=?, last_error=?, updated_at=? WHERE id=?`
+	query := `UPDATE api_keys SET model=?, is_active=?, is_quota_exceeded=?, quota_reset_time=?, rpm_limit=?, tpm_limit=?, rpd_limit=?, request_made=?, last_used_at=?, last_error=?, updated_at=? WHERE id=?`
 	_, err := r.db.ExecContext(ctx, query,
-		k.IsActive(), k.IsQuotaExceeded(), k.QuotaResetTime(),
+		k.Model(), k.IsActive(), k.IsQuotaExceeded(), k.QuotaResetTime(),
 		k.RPMLimit(), k.TPMLimit(), k.RPDLimit(),
 		k.RequestMade(), k.LastUsedAt(), k.LastError(), now, k.ID(),
 	)
@@ -58,7 +58,7 @@ func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service 
 func (r *SQLiteAPIKeyRepository) ResetExpiredQuotas(ctx context.Context) error {
 	query := `
 		UPDATE api_keys
-		SET is_quota_exceeded = 0, quota_reset_time = NULL, updated_at = ?
+		SET is_quota_exceeded = 0, quota_reset_time = NULL, request_made = 0, updated_at = ?
 		WHERE is_quota_exceeded = 1 AND quota_reset_time <= ?
 	`
 	now := time.Now()

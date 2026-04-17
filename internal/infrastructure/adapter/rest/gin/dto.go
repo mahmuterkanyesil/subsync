@@ -79,12 +79,20 @@ type APIKeyResponse struct {
 	TPMLimit        int    `json:"tpm_limit"`
 	RPDLimit        int    `json:"rpd_limit"`
 	RequestMade     int    `json:"request_made"`
+	UsagePct        int    `json:"usage_pct"`
 	LastUsedAt      string `json:"last_used_at,omitempty"`
 	LastError       string `json:"last_error,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
 
 func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
+	usagePct := 0
+	if k.RPDLimit() > 0 {
+		usagePct = k.RequestMade() * 100 / k.RPDLimit()
+		if usagePct > 100 {
+			usagePct = 100
+		}
+	}
 	r := APIKeyResponse{
 		ID:              k.ID(),
 		Service:         k.Service(),
@@ -95,6 +103,7 @@ func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
 		TPMLimit:        k.TPMLimit(),
 		RPDLimit:        k.RPDLimit(),
 		RequestMade:     k.RequestMade(),
+		UsagePct:        usagePct,
 		LastError:       k.LastError(),
 		CreatedAt:       k.CreatedAt().Format("2006-01-02 15:04"),
 	}
