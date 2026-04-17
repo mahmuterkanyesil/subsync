@@ -173,5 +173,20 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 			return err
 		}
 	}
+	s.cleanStaleRecords(ctx)
 	return nil
+}
+
+func (s *ScanningService) cleanStaleRecords(ctx context.Context) {
+	all, err := s.subtitleRepo.FindAll(ctx)
+	if err != nil {
+		return
+	}
+	for _, sub := range all {
+		if _, statErr := os.Stat(sub.EngPath()); os.IsNotExist(statErr) {
+			if delErr := s.subtitleRepo.Delete(ctx, sub.EngPath()); delErr == nil {
+				logger.Info("stale record removed: %s", filepath.Base(sub.EngPath()))
+			}
+		}
+	}
 }

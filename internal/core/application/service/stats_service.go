@@ -60,6 +60,10 @@ func (s *StatsService) FindByPath(ctx context.Context, engPath string) (*entity.
 	return s.subtitleRepo.FindByPath(ctx, engPath)
 }
 
+func (s *StatsService) DeleteSubtitle(ctx context.Context, engPath string) error {
+	return s.subtitleRepo.Delete(ctx, engPath)
+}
+
 func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
 	if err != nil {

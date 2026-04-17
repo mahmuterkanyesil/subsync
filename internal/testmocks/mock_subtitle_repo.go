@@ -61,3 +61,7 @@ func (m *MockSubtitleRepository) FindByStatus(ctx context.Context, status valueo
 	}
 	return args.Get(0).([]*entity.Subtitle), args.Error(1)
 }
+
+func (m *MockSubtitleRepository) Delete(ctx context.Context, engPath string) error {
+	return m.Called(ctx, engPath).Error(0)
+}

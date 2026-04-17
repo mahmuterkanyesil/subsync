@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/event"
+	domainservice "subsync/internal/core/domain/service"
 	"subsync/internal/core/domain/valueobject"
+	"subsync/pkg/srt"
 	"sync"
 )
 
@@ -105,6 +108,19 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	engPath := subtitle.EngPath()
 	trPath := engPath[:len(engPath)-len(".eng.srt")] + ".tr.srt"
 
+	if anomalyErr := s.checkSubtitleAnomaly(engPath, trPath); anomalyErr != nil {
+		if errors.Is(anomalyErr, os.ErrNotExist) {
+			_ = subtitle.TransitionTo(valueobject.StatusQueued)
+		} else {
+			_ = os.Remove(trPath)
+			_ = subtitle.TransitionTo(valueobject.StatusError)
+			subtitle.MarkError(fmt.Errorf("anomaly: %w", anomalyErr))
+		}
+		_ = s.subtitleRepo.Save(ctx, subtitle)
+		s.publish(event.NewEmbeddingFailed(subtitle.EngPath(), anomalyErr.Error()))
+		return
+	}
+
 	if embedErr := s.videoProcessor.EmbedSubtitle(ctx, videoPath, trPath); embedErr != nil {
 		s.handleEmbedError(ctx, subtitle, videoPath, embedErr)
 		return
@@ -113,6 +129,23 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	subtitle.MarkEmbedded()
 	_ = s.subtitleRepo.Save(ctx, subtitle)
 	s.publish(event.NewEmbeddingCompleted(subtitle.EngPath(), videoPath))
+}
+
+func (s *EmbeddingService) checkSubtitleAnomaly(engPath, trPath string) error {
+	engContent, err := os.ReadFile(engPath)
+	if err != nil {
+		return fmt.Errorf("cannot read eng.srt: %w", err)
+	}
+	trContent, err := os.ReadFile(trPath)
+	if err != nil {
+		return fmt.Errorf("tr.srt not found: %w", err)
+	}
+	if len(strings.TrimSpace(string(trContent))) == 0 {
+		return fmt.Errorf("tr.srt is empty")
+	}
+	engBlocks := srt.Parse(string(engContent))
+	trBlocks := srt.Parse(string(trContent))
+	return domainservice.ValidateTranslation(engBlocks, trBlocks)
 }
 
 func (s *EmbeddingService) handleEmbedError(ctx context.Context, subtitle *entity.Subtitle, videoPath string, err error) {

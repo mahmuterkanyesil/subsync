@@ -45,6 +45,11 @@
               <button type="submit" class="btn btn-primary btn-sm">Re-embed</button>
             </form>
             {{end}}
+            <form method="POST" action="/records/delete" style="display:inline"
+                  onsubmit="return confirm('Delete this record?')">
+              <input type="hidden" name="eng_path" value="{{.EngPath}}">
+              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            </form>
           </td>
         </tr>
         {{else}}

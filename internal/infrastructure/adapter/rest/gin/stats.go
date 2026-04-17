@@ -121,3 +121,12 @@ func (s *HTTPServer) webReEmbed(c *gin.Context) {
 	}
 	c.Redirect(http.StatusSeeOther, "/records?flash=success")
 }
+
+func (s *HTTPServer) webDeleteRecord(c *gin.Context) {
+	engPath := c.PostForm("eng_path")
+	if err := s.statsUseCase.DeleteSubtitle(c.Request.Context(), engPath); err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/records?flash=success")
+}

@@ -18,13 +18,15 @@ import (
 	"subsync/internal/testmocks"
 )
 
-// makeSubtitleForEmbed creates a Subtitle pointing to a real .eng.srt file in tmpDir.
+// makeSubtitleForEmbed creates a Subtitle pointing to a real .eng.srt (and matching .tr.srt) in tmpDir.
 func makeSubtitleForEmbed(t *testing.T, tmpDir, baseName string, status valueobject.SubtitleStatus) *entity.Subtitle {
 	t.Helper()
 	engPath := filepath.Join(tmpDir, baseName+".eng.srt")
-	// Write a small valid .eng.srt
-	err := os.WriteFile(engPath, []byte("1\n00:00:01,000 --> 00:00:02,000\nHello\n\n"), 0644)
-	require.NoError(t, err)
+	trPath := filepath.Join(tmpDir, baseName+".tr.srt")
+	block := "1\n00:00:01,000 --> 00:00:02,000\nHello\n\n"
+	trBlock := "1\n00:00:01,000 --> 00:00:02,000\nMerhaba\n\n"
+	require.NoError(t, os.WriteFile(engPath, []byte(block), 0644))
+	require.NoError(t, os.WriteFile(trPath, []byte(trBlock), 0644))
 
 	mi, err := valueobject.NewMediaInfo(valueobject.MediaTypeMovie, "", 0, 0)
 	require.NoError(t, err)
@@ -267,27 +269,34 @@ func TestEmbeddingService_EmbedPending_FFmpegFailed_StaysInDone(t *testing.T) {
 
 func TestEmbeddingService_EmbedPending_TrSrtNotFound_TransitionsQueued(t *testing.T) {
 	dir := t.TempDir()
+	// makeSubtitleForEmbed creates .tr.srt; delete it to simulate missing translation
 	subtitle := makeSubtitleForEmbed(t, dir, "notrsrt", valueobject.StatusDone)
+	require.NoError(t, os.Remove(filepath.Join(dir, "notrsrt.tr.srt")))
 
 	mkvPath := filepath.Join(dir, "notrsrt.mkv")
 	require.NoError(t, os.WriteFile(mkvPath, []byte{}, 0644))
 
 	subRepo := &testmocks.MockSubtitleRepository{}
 	vp := &testmocks.MockVideoProcessor{}
+	events := &testmocks.MockEventPublisher{}
 	defer subRepo.AssertExpectations(t)
 	defer vp.AssertExpectations(t)
+	defer events.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
 	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
-	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string")).Return(port.ErrTrSrtNotFound)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
+	events.On("Publish", mock.MatchedBy(func(e event.DomainEvent) bool {
+		return e.EventName() == "embedding.failed"
+	})).Return()
 
-	svc := newEmbedSvc(subRepo, vp, nil)
+	svc := newEmbedSvc(subRepo, vp, events)
 	err := svc.EmbedPending(context.Background())
 
 	require.NoError(t, err)
-	// ErrTrSrtNotFound → transition to StatusQueued so translation re-runs
+	// tr.srt missing → anomaly check → StatusQueued so translation re-runs
 	assert.Equal(t, valueobject.StatusQueued, subtitle.Status())
+	vp.AssertNotCalled(t, "EmbedSubtitle")
 }
 
 func TestEmbeddingService_EmbedPending_DuplicateInProgress_Skipped(t *testing.T) {

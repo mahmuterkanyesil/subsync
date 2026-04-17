@@ -104,6 +104,7 @@ func (s *HTTPServer) Start(ctx context.Context) error {
 	r.GET("/records", s.webRecords)
 	r.POST("/records/retry", s.webRetry)
 	r.POST("/records/re-embed", s.webReEmbed)
+	r.POST("/records/delete", s.webDeleteRecord)
 	r.GET("/keys", s.webKeys)
 	r.POST("/keys", s.webAddKey)
 	r.POST("/keys/:id/delete", s.webDeleteKey)

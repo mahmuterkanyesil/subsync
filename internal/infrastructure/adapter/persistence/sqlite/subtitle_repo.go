@@ -128,6 +128,11 @@ func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.Subtitl
 	return stats, nil
 }
 
+func (r *SQLiteSubtitleRepository) Delete(ctx context.Context, engPath string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM subtitles WHERE eng_path = ?", engPath)
+	return err
+}
+
 // --- yardımcı fonksiyonlar ---
 
 func scanSubtitle(row *sql.Row) (*entity.Subtitle, error) {
