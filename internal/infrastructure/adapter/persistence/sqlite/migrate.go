@@ -17,15 +17,16 @@ var migration003SQL string
 //go:embed migrations/004_apikey_limits.sql
 var migration004SQL string
 
+//go:embed migrations/005_update_model_names.sql
+var migration005SQL string
+
 func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(initSQL); err != nil {
 		return err
 	}
-	// 002: ALTER TABLE — mevcut sütun varsa hatayı yoksay (idempotent)
 	_, _ = db.Exec(migration002SQL)
-	// 003: CREATE TABLE IF NOT EXISTS — idempotent
 	_, _ = db.Exec(migration003SQL)
-	// 004: ALTER TABLE — mevcut sütun varsa hatayı yoksay (idempotent)
 	_, _ = db.Exec(migration004SQL)
+	_, _ = db.Exec(migration005SQL)
 	return nil
 }

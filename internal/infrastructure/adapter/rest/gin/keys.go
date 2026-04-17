@@ -3,6 +3,7 @@ package gin
 import (
 	"fmt"
 	"net/http"
+	"subsync/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 )
@@ -90,7 +91,7 @@ func (s *HTTPServer) webKeys(c *gin.Context) {
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.keys.ExecuteTemplate(c.Writer, "layout", data); err != nil {
-		_ = err
+		logger.Error("keys template: %v", err)
 	}
 }
 
