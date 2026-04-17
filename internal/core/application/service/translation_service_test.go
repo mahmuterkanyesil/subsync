@@ -208,7 +208,7 @@ func TestTranslationService_Translate_ValidationFails_TransitionsToError(t *test
 	assert.Equal(t, valueobject.StatusError, subtitle.Status())
 }
 
-func TestTranslationService_Translate_QuotaExhaustedRPD_TransitionsToQuotaExhausted(t *testing.T) {
+func TestTranslationService_Translate_RPD_FallsBackToNextModel(t *testing.T) {
 	engPath := makeEngSRT(t, srtContent())
 	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
 
@@ -221,29 +221,65 @@ func TestTranslationService_Translate_QuotaExhaustedRPD_TransitionsToQuotaExhaus
 	defer translator.AssertExpectations(t)
 	defer progressStore.AssertExpectations(t)
 
+	key := makeKey(t)
 	quotaErr := errors.New("quota_exhausted_rpd")
+	translated := turkishBlocks()
 
 	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 
-	// maxRetry = 10: set up 10 keys all returning quota_exhausted_rpd
-	for i := 1; i <= 10; i++ {
-		k, _ := entity.NewAPIKey("gemini", fmt.Sprintf("key-%d", i))
-		keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(k, nil).Once()
-		translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), fmt.Sprintf("key-%d", i), mock.Anything).Return(nil, quotaErr)
-		keyRepo.On("Save", mock.Anything, k).Return(nil)
-	}
-
+	// First call fails with RPD on gemini-3.1-flash-lite, second call succeeds (gemini-2.5-flash)
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+		Return(nil, quotaErr).Once()
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+		Return(translated, nil).Once()
+	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
 	err := svc.Translate(context.Background(), engPath)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "quota exhausted")
-	assert.Equal(t, valueobject.StatusQuotaExhausted, subtitle.Status())
+	assert.NoError(t, err)
+	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
+}
+
+func TestTranslationService_Translate_AllModelsExhausted_WaitsForReset(t *testing.T) {
+	engPath := makeEngSRT(t, srtContent())
+	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
+
+	subRepo := &testmocks.MockSubtitleRepository{}
+	keyRepo := &testmocks.MockAPIKeyRepository{}
+	translator := &testmocks.MockTranslationProvider{}
+	progressStore := &testmocks.MockProgressStore{}
+	defer subRepo.AssertExpectations(t)
+	defer keyRepo.AssertExpectations(t)
+	defer translator.AssertExpectations(t)
+	defer progressStore.AssertExpectations(t)
+
+	key := makeKey(t)
+	quotaErr := errors.New("quota_exhausted_rpd")
+
+	// Context cancelled shortly after all 4 models exhaust
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
+	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
+	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
+
+	// 4 models × 1 call each = 4 RPD failures → all models exhausted → wait → ctx cancelled
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(4)
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+		Return(nil, quotaErr).Times(4)
+
+	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
+	err := svc.Translate(ctx, engPath)
+
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
 
 func TestTranslationService_Translate_QuotaExhaustedRPM_CtxCancel_SavesProgress(t *testing.T) {
@@ -299,8 +335,6 @@ func TestTranslationService_Translate_NoAPIKey_ReturnsError(t *testing.T) {
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(nil, errors.New("no keys"))
-	keyRepo.On("FindEarliestQuotaReset", mock.Anything, "gemini").Return(nil, nil)
-	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 	translator.AssertNotCalled(t, "TranslateBatch")
 
@@ -312,49 +346,6 @@ func TestTranslationService_Translate_NoAPIKey_ReturnsError(t *testing.T) {
 	assert.Equal(t, valueobject.StatusQuotaExhausted, subtitle.Status())
 }
 
-func TestTranslationService_Translate_AllKeysExceeded_WaitsForReset(t *testing.T) {
-	// When all keys are temporarily quota-exceeded, the service must wait until the
-	// earliest reset time and retry — not fail immediately.
-	engPath := makeEngSRT(t, srtContent())
-	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
-
-	subRepo := &testmocks.MockSubtitleRepository{}
-	keyRepo := &testmocks.MockAPIKeyRepository{}
-	translator := &testmocks.MockTranslationProvider{}
-	progressStore := &testmocks.MockProgressStore{}
-	defer subRepo.AssertExpectations(t)
-	defer keyRepo.AssertExpectations(t)
-	defer translator.AssertExpectations(t)
-	defer progressStore.AssertExpectations(t)
-
-	key := makeKey(t)
-	translated := turkishBlocks()
-	// Reset time in the past → wait duration resolves immediately.
-	pastReset := time.Now().Add(-1 * time.Second)
-
-	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
-	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
-	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
-
-	// First call: all keys exceeded → ErrNoRows
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(nil, errors.New("sql: no rows in result set")).Once()
-	keyRepo.On("FindEarliestQuotaReset", mock.Anything, "gemini").Return(&pastReset, nil).Once()
-
-	// After wait: key is now available → translation succeeds
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Once()
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
-		Return(translated, nil)
-	keyRepo.On("Save", mock.Anything, key).Return(nil)
-	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
-	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
-	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
-
-	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
-
-	require.NoError(t, err)
-	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
-}
 
 func TestTranslationService_Translate_PublishesEventOnSuccess(t *testing.T) {
 	engPath := makeEngSRT(t, srtContent())

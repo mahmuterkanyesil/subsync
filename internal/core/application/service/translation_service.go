@@ -15,12 +15,14 @@ import (
 )
 
 type TranslationService struct {
-	subtitleRepo port.SubtitleRepository
-	apiKeyRepo   port.APIKeyRepository
-	translator   port.TranslationProvider
-	progress     port.ProgressStore
-	events       port.EventPublisher
-	batchSize    int
+	subtitleRepo    port.SubtitleRepository
+	apiKeyRepo      port.APIKeyRepository
+	translator      port.TranslationProvider
+	progress        port.ProgressStore
+	events          port.EventPublisher
+	batchSize       int
+	modelPriority   []string
+	exhaustedModels map[string]time.Time
 }
 
 func NewTranslationService(
@@ -38,7 +40,35 @@ func NewTranslationService(
 		progress:     progress,
 		events:       events,
 		batchSize:    batchSize,
+		modelPriority: []string{
+			"gemini-3.1-flash-lite",
+			"gemini-2.5-flash",
+			"gemini-2.5-flash-lite",
+			"gemini-3-flash",
+		},
+		exhaustedModels: make(map[string]time.Time),
 	}
+}
+
+func (s *TranslationService) pickModel() string {
+	now := time.Now()
+	for _, m := range s.modelPriority {
+		if t, ok := s.exhaustedModels[m]; !ok || now.After(t) {
+			delete(s.exhaustedModels, m)
+			return m
+		}
+	}
+	return ""
+}
+
+func (s *TranslationService) earliestModelReset() time.Time {
+	var earliest time.Time
+	for _, t := range s.exhaustedModels {
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
+		}
+	}
+	return earliest
 }
 
 func (s *TranslationService) publish(e event.DomainEvent) {
@@ -76,8 +106,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 	}
 
 	remaining := blocks[len(translated):]
-	retryCount := 0
-	maxRetry := 10
 
 	for i := 0; i < len(remaining); {
 		end := i + s.batchSize
@@ -86,16 +114,10 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		}
 		batch := remaining[i:end]
 
-		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
-		if err != nil {
-			resetAt, _ := s.apiKeyRepo.FindEarliestQuotaReset(ctx, "gemini")
-			if resetAt == nil {
-				_ = s.progress.Save(ctx, engPath, translated)
-				_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
-				_ = s.subtitleRepo.Save(ctx, subtitle)
-				return fmt.Errorf("no active api keys configured for service gemini")
-			}
-			wait := time.Until(*resetAt) + 30*time.Second
+		currentModel := s.pickModel()
+		if currentModel == "" {
+			resetAt := s.earliestModelReset()
+			wait := time.Until(resetAt) + 30*time.Second
 			if wait < 0 {
 				wait = 30 * time.Second
 			}
@@ -107,7 +129,14 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			continue
 		}
 
-		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), apiKey.Model())
+		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
+		if err != nil {
+			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
+			_ = s.subtitleRepo.Save(ctx, subtitle)
+			return fmt.Errorf("no active api keys configured for service gemini")
+		}
+
+		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), currentModel)
 		if err != nil {
 			errStr := err.Error()
 			switch {
@@ -122,17 +151,9 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 			case strings.Contains(errStr, "quota_exhausted_rpd"),
 				strings.Contains(errStr, "quota_exhausted"):
-				apiKey.MarkAsQuotaExceeded(time.Now().Add(24*time.Hour), err.Error())
-				_ = s.apiKeyRepo.Save(ctx, apiKey)
+				s.exhaustedModels[currentModel] = time.Now().Add(24 * time.Hour)
 				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 				_ = os.Remove(trPath)
-				retryCount++
-				if retryCount >= maxRetry {
-					_ = s.progress.Save(ctx, engPath, translated)
-					_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
-					_ = s.subtitleRepo.Save(ctx, subtitle)
-					return fmt.Errorf("all api keys quota exhausted")
-				}
 				continue
 
 			default:
@@ -141,7 +162,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			}
 		}
 
-		retryCount = 0
 		apiKey.MarkAsUsed()
 		_ = s.apiKeyRepo.Save(ctx, apiKey)
 		translated = append(translated, result...)
