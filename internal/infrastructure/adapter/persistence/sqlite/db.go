@@ -16,6 +16,20 @@ func Open(dbPath string) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// WAL mode allows concurrent readers from multiple processes (api/worker/embedder)
+	// without blocking each other. busy_timeout makes writers wait up to 5s on lock
+	// instead of immediately returning SQLITE_BUSY.
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA journal_mode = WAL"); err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000"); err != nil {
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA synchronous = NORMAL"); err != nil {
+		return nil, err
+	}
+
 	if err := migrate(db); err != nil {
 		return nil, err
 	}

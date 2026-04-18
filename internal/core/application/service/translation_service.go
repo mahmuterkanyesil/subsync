@@ -218,14 +218,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		return err
 	}
 
-	_ = s.progress.Clear(ctx, engPath)
-
 	if err := subtitle.TransitionTo(valueobject.StatusDone); err != nil {
 		return err
 	}
 	if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
 		return err
 	}
+	// Clear progress only after DB is committed so a retry can resume from
+	// the saved blocks instead of restarting from scratch.
+	_ = s.progress.Clear(ctx, engPath)
 
 	logger.Info("translate done: %s — %d blocks", name, len(translated))
 	s.publish(event.NewTranslationCompleted(engPath))
