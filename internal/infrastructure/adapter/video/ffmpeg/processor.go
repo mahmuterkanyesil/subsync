@@ -11,18 +11,28 @@ import (
 	"strings"
 	"subsync/internal/core/application/port"
 	"subsync/pkg/logger"
+	"subsync/pkg/srt"
 )
 
 var engSrtRegex = regexp.MustCompile(`(?i)\.en[^a-z]|\.eng[^a-z]`)
 
+// minSRTBlocks is the minimum number of parsed SRT blocks required for a
+// subtitle file to be considered usable. Replaces the old 10KB size check,
+// which rejected valid files from dialog-light episodes.
+const minSRTBlocks = 5
+
+var skipTitles = []string{"forced", "signs", "songs", "sdh"}
+
+type subtitleStream struct {
+	Index int
+	Tags  struct {
+		Language string `json:"language"`
+		Title    string `json:"title"`
+	} `json:"tags"`
+}
+
 type ffprobeOutput struct {
-	Streams []struct {
-		Index int `json:"index"`
-		Tags  struct {
-			Language string `json:"language"`
-			Title    string `json:"title"`
-		} `json:"tags"`
-	} `json:"streams"`
+	Streams []subtitleStream `json:"streams"`
 }
 
 type FFmpegProcessor struct{}
@@ -31,9 +41,56 @@ func NewFFmpegProcessor() *FFmpegProcessor {
 	return &FFmpegProcessor{}
 }
 
-func isSizeValid(path string, minBytes int64) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Size() >= minBytes
+// orderedStreamIndices returns subtitle stream indices in preference order:
+// English-tagged non-skip streams first, then all remaining non-skip streams.
+// Streams tagged forced/signs/songs/sdh are excluded entirely.
+func orderedStreamIndices(streams []subtitleStream) []int {
+	var eng, other []int
+	for i, s := range streams {
+		title := strings.ToLower(s.Tags.Title)
+		skip := false
+		for _, bad := range skipTitles {
+			if strings.Contains(title, bad) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		lang := strings.ToLower(s.Tags.Language)
+		if lang == "eng" || lang == "en" {
+			eng = append(eng, i)
+		} else {
+			other = append(other, i)
+		}
+	}
+	return append(eng, other...)
+}
+
+// parseSRTFile reads path and returns parsed blocks. Returns (nil, false) if
+// the file cannot be read.
+func parseSRTFile(path string) ([]string, bool) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false
+	}
+	blocks := srt.Parse(string(data))
+	texts := make([]string, len(blocks))
+	for i := range blocks {
+		texts[i] = blocks[i].Text
+	}
+	return texts, true
+}
+
+// parseSRTFileBlockCount returns the number of SRT blocks in path.
+// Returns 0 if the file cannot be read or parsed.
+func parseSRTFileBlockCount(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	return len(srt.Parse(string(data)))
 }
 
 func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath string) (bool, error) {
@@ -56,54 +113,70 @@ func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath stri
 func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath string) (string, error) {
 	base := strings.TrimSuffix(videoPath, filepath.Ext(videoPath))
 
-	// Step 1: Hardcoded candidates
+	// Step 1: Hardcoded sidecar candidates — validate by block count, not size.
 	for _, c := range []string{base + ".eng.srt", base + ".en.srt", base + ".english.srt"} {
-		if info, err := os.Stat(c); err == nil {
-			if info.Size() >= 10*1024 {
-				return c, nil
-			}
-			_ = os.Remove(c) // too small — re-extract
+		if n := parseSRTFileBlockCount(c); n >= minSRTBlocks {
+			return c, nil
+		}
+		if _, err := os.Stat(c); err == nil {
+			_ = os.Remove(c) // exists but unusable — delete so we re-extract
 		}
 	}
 
-	// Step 2: Regex scan directory
+	// Step 2: Regex scan directory for eng-named srt files.
 	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(videoPath), "*.srt"))
 	for _, m := range matches {
-		if engSrtRegex.MatchString(filepath.Base(m)) && isSizeValid(m, 10*1024) {
-			return m, nil
+		if engSrtRegex.MatchString(filepath.Base(m)) {
+			if parseSRTFileBlockCount(m) >= minSRTBlocks {
+				return m, nil
+			}
 		}
 	}
 
-	// Step 3: ffprobe language-aware stream selection
-	streamIndex, err := f.findEngSubtitleStream(ctx, videoPath)
+	// Step 3: ffprobe — discover all subtitle streams.
+	streams, err := f.probeSubtitleStreams(ctx, videoPath)
 	if err != nil {
 		return "", err
 	}
 
-	// Step 4: Extract stream
+	indices := orderedStreamIndices(streams)
+	if len(indices) == 0 {
+		return "", port.ErrNoEngStream
+	}
+
+	// Step 4: Try each stream in preference order; keep first with enough blocks.
 	engPath := base + ".eng.srt"
-	cmd := exec.CommandContext(ctx, "ffmpeg",
-		"-i", videoPath,
-		"-map", fmt.Sprintf("0:s:%d", streamIndex),
-		"-c:s", "srt",
-		engPath,
-		"-y",
-	)
-	logger.Info("extract sub stream %d: %s", streamIndex, filepath.Base(videoPath))
-	if err := cmd.Run(); err != nil {
-		logger.Error("subtitle extract failed: %s — %v", filepath.Base(videoPath), err)
-		return "", fmt.Errorf("subtitle extraction failed: %w", err)
+	for _, idx := range indices {
+		tmpPath := fmt.Sprintf("%s.stream%d.tmp.srt", base, idx)
+		cmd := exec.CommandContext(ctx, "ffmpeg",
+			"-i", videoPath,
+			"-map", fmt.Sprintf("0:s:%d", idx),
+			"-c:s", "srt",
+			tmpPath, "-y",
+		)
+		logger.Info("extract sub stream %d: %s", idx, filepath.Base(videoPath))
+		if err := cmd.Run(); err != nil {
+			logger.Warn("stream %d extract failed: %s — %v", idx, filepath.Base(videoPath), err)
+			_ = os.Remove(tmpPath)
+			continue
+		}
+		n := parseSRTFileBlockCount(tmpPath)
+		if n < minSRTBlocks {
+			logger.Warn("stream %d too few blocks (%d/%d): %s", idx, n, minSRTBlocks, filepath.Base(videoPath))
+			_ = os.Remove(tmpPath)
+			continue
+		}
+		if err := os.Rename(tmpPath, engPath); err != nil {
+			_ = os.Remove(tmpPath)
+			return "", err
+		}
+		return engPath, nil
 	}
 
-	if !isSizeValid(engPath, 10*1024) {
-		_ = os.Remove(engPath)
-		return "", fmt.Errorf("extracted subtitle too small (< 10KB)")
-	}
-
-	return engPath, nil
+	return "", fmt.Errorf("no subtitle stream produced %d+ blocks: %w", minSRTBlocks, port.ErrNoEngStream)
 }
 
-func (f *FFmpegProcessor) findEngSubtitleStream(ctx context.Context, videoPath string) (int, error) {
+func (f *FFmpegProcessor) probeSubtitleStreams(ctx context.Context, videoPath string) ([]subtitleStream, error) {
 	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
@@ -113,59 +186,21 @@ func (f *FFmpegProcessor) findEngSubtitleStream(ctx context.Context, videoPath s
 	)
 	out, err := cmd.Output()
 	if err != nil {
-		return 0, fmt.Errorf("ffprobe failed: %w", err)
+		return nil, fmt.Errorf("ffprobe failed: %w", err)
 	}
-
 	var probe ffprobeOutput
 	if err := json.Unmarshal(out, &probe); err != nil {
-		return 0, fmt.Errorf("ffprobe parse failed: %w", err)
+		return nil, fmt.Errorf("ffprobe parse failed: %w", err)
 	}
-
-	skipTitles := []string{"forced", "signs", "songs", "sdh"}
-
-	for i, s := range probe.Streams {
-		lang := strings.ToLower(s.Tags.Language)
-		title := strings.ToLower(s.Tags.Title)
-
-		if lang != "eng" && lang != "en" {
-			continue
-		}
-		skip := false
-		for _, bad := range skipTitles {
-			if strings.Contains(title, bad) {
-				skip = true
-				break
-			}
-		}
-		if !skip {
-			return i, nil
-		}
-	}
-
-	// Fall back to first stream if no language-tagged stream found
-	if len(probe.Streams) > 0 {
-		return 0, nil
-	}
-	return 0, port.ErrNoEngStream
+	return probe.Streams, nil
 }
 
 func (f *FFmpegProcessor) countSubtitleStreams(ctx context.Context, videoPath string) int {
-	cmd := exec.CommandContext(ctx, "ffprobe",
-		"-v", "quiet",
-		"-print_format", "json",
-		"-show_streams",
-		"-select_streams", "s",
-		videoPath,
-	)
-	out, err := cmd.Output()
+	streams, err := f.probeSubtitleStreams(ctx, videoPath)
 	if err != nil {
 		return 0
 	}
-	var probe ffprobeOutput
-	if err := json.Unmarshal(out, &probe); err != nil {
-		return 0
-	}
-	return len(probe.Streams)
+	return len(streams)
 }
 
 func (f *FFmpegProcessor) probeOK(ctx context.Context, path string) bool {
