@@ -60,7 +60,7 @@ func extractSxxExx(path string) (season, episode int, ok bool) {
 
 // inferMediaInfo dosya adından MediaInfo oluşturur.
 // SxxExx deseni varsa dizi, yoksa film olarak işaretler.
-func inferMediaInfo(videoPath string) valueobject.MediaInfo {
+func inferMediaInfo(videoPath string) *valueobject.MediaInfo {
 	base := filepath.Base(videoPath)
 	nameWithoutExt := strings.TrimSuffix(base, filepath.Ext(base))
 
@@ -83,7 +83,7 @@ func inferMediaInfo(videoPath string) valueobject.MediaInfo {
 	if err == nil {
 		return mi
 	}
-	return valueobject.MediaInfo{}
+	return &valueobject.MediaInfo{}
 }
 
 func (s *ScanningService) Scan(ctx context.Context) error {

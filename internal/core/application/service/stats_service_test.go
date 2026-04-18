@@ -53,7 +53,7 @@ func TestStatsService_GetStats_DelegatesToRepo(t *testing.T) {
 	subRepo := &testmocks.MockSubtitleRepository{}
 	defer subRepo.AssertExpectations(t)
 
-	want := port.SubtitleStats{Total: 5, Done: 3, Queued: 2}
+	want := &port.SubtitleStats{Total: 5, Done: 3, Queued: 2}
 	subRepo.On("Statistics", mock.Anything).Return(want, nil)
 
 	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
@@ -373,7 +373,7 @@ func TestStatsService_GetStats_RepoError_Propagated(t *testing.T) {
 	defer subRepo.AssertExpectations(t)
 
 	repoErr := errors.New("db connection lost")
-	subRepo.On("Statistics", mock.Anything).Return(port.SubtitleStats{}, repoErr)
+	subRepo.On("Statistics", mock.Anything).Return((*port.SubtitleStats)(nil), repoErr)
 
 	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
 	_, err := svc.GetStats(context.Background())

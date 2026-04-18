@@ -56,7 +56,7 @@ func toSubtitleResponses(subtitles []*entity.Subtitle) []SubtitleResponse {
 	return result
 }
 
-func toStatsResponse(stats port.SubtitleStats) StatsResponse {
+func toStatsResponse(stats *port.SubtitleStats) StatsResponse {
 	return StatsResponse{
 		Total:          stats.Total,
 		Queued:         stats.Queued,

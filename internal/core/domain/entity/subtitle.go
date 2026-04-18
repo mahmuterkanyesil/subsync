@@ -10,7 +10,7 @@ import (
 
 type Subtitle struct {
 	id        uuid.UUID
-	mediaInfo valueobject.MediaInfo
+	mediaInfo *valueobject.MediaInfo
 	status    valueobject.SubtitleStatus
 	engPath   string
 	lastError string
@@ -19,7 +19,7 @@ type Subtitle struct {
 	updatedAt time.Time
 }
 
-func NewSubtitle(mediaInfo valueobject.MediaInfo, engPath string) (*Subtitle, error) {
+func NewSubtitle(mediaInfo *valueobject.MediaInfo, engPath string) (*Subtitle, error) {
 	if engPath == "" {
 		return nil, &exception.InvalidSubtitleException{Message: "engPath cannot be empty"}
 	}
@@ -35,7 +35,7 @@ func NewSubtitle(mediaInfo valueobject.MediaInfo, engPath string) (*Subtitle, er
 
 func RestoreSubtitle(
 	id uuid.UUID,
-	mediaInfo valueobject.MediaInfo,
+	mediaInfo *valueobject.MediaInfo,
 	engPath string,
 	status valueobject.SubtitleStatus,
 	lastError string,
@@ -64,7 +64,7 @@ func (s *Subtitle) LastError() string              { return s.lastError }
 func (s *Subtitle) Embedded() bool                 { return s.embedded }
 func (s *Subtitle) CreatedAt() time.Time           { return s.createdAt }
 func (s *Subtitle) UpdatedAt() time.Time           { return s.updatedAt }
-func (s *Subtitle) MediaInfo() valueobject.MediaInfo { return s.mediaInfo }
+func (s *Subtitle) MediaInfo() *valueobject.MediaInfo { return s.mediaInfo }
 
 func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
 	if s.status.CanTransitionTo(newStatus) {

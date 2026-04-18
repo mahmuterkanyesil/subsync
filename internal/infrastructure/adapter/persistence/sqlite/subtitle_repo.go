@@ -94,15 +94,15 @@ func (r *SQLiteSubtitleRepository) FindByStatus(ctx context.Context, status valu
 	return scanSubtitles(rows)
 }
 
-func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (port.SubtitleStats, error) {
+func (r *SQLiteSubtitleRepository) Statistics(ctx context.Context) (*port.SubtitleStats, error) {
 	query := `SELECT status, COUNT(*) FROM subtitles GROUP BY status`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		return port.SubtitleStats{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	stats := port.SubtitleStats{}
+	stats := &port.SubtitleStats{}
 	for rows.Next() {
 		var status string
 		var count int

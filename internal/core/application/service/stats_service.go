@@ -48,7 +48,7 @@ func NewStatsService(
 	}
 }
 
-func (s *StatsService) GetStats(ctx context.Context) (port.SubtitleStats, error) {
+func (s *StatsService) GetStats(ctx context.Context) (*port.SubtitleStats, error) {
 	return s.subtitleRepo.Statistics(ctx)
 }
 

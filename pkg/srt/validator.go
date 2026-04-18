@@ -9,8 +9,8 @@ import (
 // Domain service'e delege eder.
 func IsTurkish(blocks []valueobject.SRTBlock) bool {
 	texts := make([]string, len(blocks))
-	for i, b := range blocks {
-		texts[i] = b.Text
+	for i := range blocks {
+		texts[i] = blocks[i].Text
 	}
 	return domainservice.IsTranslatedToTurkish(texts)
 }

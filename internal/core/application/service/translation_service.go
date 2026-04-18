@@ -204,8 +204,8 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 	// Domain service ile doğrula
 	texts := make([]string, len(translated))
-	for i, b := range translated {
-		texts[i] = b.Text
+	for i := range translated {
+		texts[i] = translated[i].Text
 	}
 	if !domainservice.IsTranslatedToTurkish(texts) {
 		_ = subtitle.TransitionTo(valueobject.StatusError)

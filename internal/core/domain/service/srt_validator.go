@@ -21,10 +21,10 @@ func ValidateBlockCount(original, translated []valueobject.SRTBlock) error {
 
 // ValidateBlockNumbers checks that block indices form a contiguous sequence starting from 1.
 func ValidateBlockNumbers(blocks []valueobject.SRTBlock) error {
-	for i, b := range blocks {
+	for i := range blocks {
 		expected := i + 1
-		if b.Index != expected {
-			return fmt.Errorf("block %d has unexpected index %d (expected %d)", i, b.Index, expected)
+		if blocks[i].Index != expected {
+			return fmt.Errorf("block %d has unexpected index %d (expected %d)", i, blocks[i].Index, expected)
 		}
 	}
 	return nil
@@ -45,12 +45,12 @@ func ValidateTimingOrder(blocks []valueobject.SRTBlock) error {
 
 // ValidateBlockFormat checks that every block has a valid timestamp and non-empty text.
 func ValidateBlockFormat(blocks []valueobject.SRTBlock) error {
-	for _, b := range blocks {
-		if !timestampRe.MatchString(strings.TrimSpace(b.Timestamp)) {
-			return fmt.Errorf("block %d has invalid timestamp: %q", b.Index, b.Timestamp)
+	for i := range blocks {
+		if !timestampRe.MatchString(strings.TrimSpace(blocks[i].Timestamp)) {
+			return fmt.Errorf("block %d has invalid timestamp: %q", blocks[i].Index, blocks[i].Timestamp)
 		}
-		if strings.TrimSpace(b.Text) == "" {
-			return fmt.Errorf("block %d has empty text", b.Index)
+		if strings.TrimSpace(blocks[i].Text) == "" {
+			return fmt.Errorf("block %d has empty text", blocks[i].Index)
 		}
 	}
 	return nil

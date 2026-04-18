@@ -19,7 +19,7 @@ type EmbeddingUseCase interface {
 }
 
 type StatsUseCase interface {
-	GetStats(ctx context.Context) (SubtitleStats, error)
+	GetStats(ctx context.Context) (*SubtitleStats, error)
 	ListRecords(ctx context.Context) ([]*entity.Subtitle, error)
 	FindByPath(ctx context.Context, engPath string) (*entity.Subtitle, error)
 	ReTranslate(ctx context.Context, engPath string) error

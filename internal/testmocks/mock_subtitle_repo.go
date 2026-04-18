@@ -41,9 +41,12 @@ func (m *MockSubtitleRepository) FindPendingEmbed(ctx context.Context) ([]*entit
 	return args.Get(0).([]*entity.Subtitle), args.Error(1)
 }
 
-func (m *MockSubtitleRepository) Statistics(ctx context.Context) (port.SubtitleStats, error) {
+func (m *MockSubtitleRepository) Statistics(ctx context.Context) (*port.SubtitleStats, error) {
 	args := m.Called(ctx)
-	return args.Get(0).(port.SubtitleStats), args.Error(1)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*port.SubtitleStats), args.Error(1)
 }
 
 func (m *MockSubtitleRepository) FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error) {

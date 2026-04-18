@@ -13,7 +13,7 @@ import (
 	"subsync/internal/core/domain/valueobject"
 )
 
-func validMediaInfo(t *testing.T) valueobject.MediaInfo {
+func validMediaInfo(t *testing.T) *valueobject.MediaInfo {
 	t.Helper()
 	mi, err := valueobject.NewMediaInfo(valueobject.MediaTypeMovie, "", 0, 0)
 	require.NoError(t, err)

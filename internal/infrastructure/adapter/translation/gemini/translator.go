@@ -149,8 +149,8 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 	metas := make([]blockMeta, len(blocks))
 	cleanBlocks := make([]port.SRTBlock, len(blocks))
 
-	for i, b := range blocks {
-		lines := strings.Split(b.Text, "\n")
+	for i := range blocks {
+		lines := strings.Split(blocks[i].Text, "\n")
 		fmts := make([]lineFormatting, len(lines))
 		cleanLines := make([]string, len(lines))
 		for j, line := range lines {
@@ -160,16 +160,16 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 		}
 		metas[i] = blockMeta{lineFmts: fmts}
 		cleanBlocks[i] = port.SRTBlock{
-			Index:     b.Index,
-			Timestamp: b.Timestamp,
+			Index:     blocks[i].Index,
+			Timestamp: blocks[i].Timestamp,
 			Text:      strings.Join(cleanLines, "\n"),
 		}
 	}
 
 	// Build XML batch prompt
 	var sb strings.Builder
-	for idx, b := range cleanBlocks {
-		sb.WriteString(fmt.Sprintf("<b id=\"%d\">\n%d\n%s\n%s\n</b>\n\n", idx, b.Index, b.Timestamp, b.Text))
+	for idx := range cleanBlocks {
+		sb.WriteString(fmt.Sprintf("<b id=\"%d\">\n%d\n%s\n%s\n</b>\n\n", idx, cleanBlocks[idx].Index, cleanBlocks[idx].Timestamp, cleanBlocks[idx].Text))
 	}
 
 	promptContent := fmt.Sprintf(
