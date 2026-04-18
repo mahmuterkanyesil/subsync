@@ -20,6 +20,9 @@ var migration004SQL string
 //go:embed migrations/005_update_model_names.sql
 var migration005SQL string
 
+//go:embed migrations/006_model_usage.sql
+var migration006SQL string
+
 func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(initSQL); err != nil {
 		return err
@@ -28,5 +31,6 @@ func Migrate(db *sql.DB) error {
 	_, _ = db.Exec(migration003SQL)
 	_, _ = db.Exec(migration004SQL)
 	_, _ = db.Exec(migration005SQL)
+	_, _ = db.Exec(migration006SQL)
 	return nil
 }

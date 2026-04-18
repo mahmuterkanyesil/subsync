@@ -36,6 +36,17 @@ type WatchDirRepository interface {
 	Delete(ctx context.Context, id int) error
 }
 
+type ModelUsage struct {
+	Model       string
+	RequestMade int
+	RPDLimit    int
+}
+
+type APIKeyWithUsage struct {
+	Key        *entity.APIKey
+	ModelUsage []ModelUsage
+}
+
 type APIKeyRepository interface {
 	Save(ctx context.Context, k *entity.APIKey) error
 	FindByID(ctx context.Context, id int) (*entity.APIKey, error)
@@ -44,4 +55,7 @@ type APIKeyRepository interface {
 	ResetExpiredQuotas(ctx context.Context) error
 	FindAll(ctx context.Context) ([]*entity.APIKey, error)
 	Delete(ctx context.Context, id int) error
+	IncrementModelUsage(ctx context.Context, keyID int, model string) error
+	FindAllModelUsage(ctx context.Context, keyID int) ([]ModelUsage, error)
+	ResetExpiredModelUsages(ctx context.Context) error
 }

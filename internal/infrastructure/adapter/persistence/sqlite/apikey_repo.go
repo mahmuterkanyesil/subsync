@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"time"
 )
@@ -56,13 +57,57 @@ func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service 
 }
 
 func (r *SQLiteAPIKeyRepository) ResetExpiredQuotas(ctx context.Context) error {
+	now := time.Now()
+	_ = r.ResetExpiredModelUsages(ctx)
 	query := `
 		UPDATE api_keys
 		SET is_quota_exceeded = 0, quota_reset_time = NULL, request_made = 0, updated_at = ?
 		WHERE is_quota_exceeded = 1 AND quota_reset_time <= ?
 	`
-	now := time.Now()
 	_, err := r.db.ExecContext(ctx, query, now, now)
+	return err
+}
+
+func (r *SQLiteAPIKeyRepository) IncrementModelUsage(ctx context.Context, keyID int, model string) error {
+	_, err := r.db.ExecContext(ctx,
+		`INSERT INTO api_key_model_usage (api_key_id, model, request_made, updated_at)
+		 VALUES (?, ?, 1, ?)
+		 ON CONFLICT(api_key_id, model) DO UPDATE
+		 SET request_made = request_made + 1, updated_at = excluded.updated_at`,
+		keyID, model, time.Now(),
+	)
+	return err
+}
+
+func (r *SQLiteAPIKeyRepository) FindAllModelUsage(ctx context.Context, keyID int) ([]port.ModelUsage, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT model, request_made FROM api_key_model_usage WHERE api_key_id = ? ORDER BY model`,
+		keyID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []port.ModelUsage
+	for rows.Next() {
+		var u port.ModelUsage
+		if err := rows.Scan(&u.Model, &u.RequestMade); err != nil {
+			return nil, err
+		}
+		result = append(result, u)
+	}
+	return result, rows.Err()
+}
+
+func (r *SQLiteAPIKeyRepository) ResetExpiredModelUsages(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx,
+		`DELETE FROM api_key_model_usage
+		 WHERE api_key_id IN (
+		     SELECT id FROM api_keys
+		     WHERE is_quota_exceeded = 1 AND quota_reset_time <= ?
+		 )`,
+		time.Now(),
+	)
 	return err
 }
 

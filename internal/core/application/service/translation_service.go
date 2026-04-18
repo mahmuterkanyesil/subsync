@@ -180,6 +180,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 		apiKey.MarkAsUsed()
 		_ = s.apiKeyRepo.Save(ctx, apiKey)
+		_ = s.apiKeyRepo.IncrementModelUsage(ctx, apiKey.ID(), currentModel)
 		translated = append(translated, result...)
 		_ = s.progress.Save(ctx, engPath, translated)
 		i += s.batchSize

@@ -68,24 +68,32 @@ func toStatsResponse(stats port.SubtitleStats) StatsResponse {
 	}
 }
 
-type APIKeyResponse struct {
-	ID              int    `json:"id"`
-	Service         string `json:"service"`
-	Model           string `json:"model"`
-	IsActive        bool   `json:"is_active"`
-	IsQuotaExceeded bool   `json:"is_quota_exceeded"`
-	QuotaResetTime  string `json:"quota_reset_time,omitempty"`
-	RPMLimit        int    `json:"rpm_limit"`
-	TPMLimit        int    `json:"tpm_limit"`
-	RPDLimit        int    `json:"rpd_limit"`
-	RequestMade     int    `json:"request_made"`
-	UsagePct        int    `json:"usage_pct"`
-	LastUsedAt      string `json:"last_used_at,omitempty"`
-	LastError       string `json:"last_error,omitempty"`
-	CreatedAt       string `json:"created_at"`
+type ModelUsageResponse struct {
+	Model       string `json:"model"`
+	RequestMade int    `json:"request_made"`
+	RPDLimit    int    `json:"rpd_limit"`
+	UsagePct    int    `json:"usage_pct"`
 }
 
-func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
+type APIKeyResponse struct {
+	ID              int                  `json:"id"`
+	Service         string               `json:"service"`
+	Model           string               `json:"model"`
+	IsActive        bool                 `json:"is_active"`
+	IsQuotaExceeded bool                 `json:"is_quota_exceeded"`
+	QuotaResetTime  string               `json:"quota_reset_time,omitempty"`
+	RPMLimit        int                  `json:"rpm_limit"`
+	TPMLimit        int                  `json:"tpm_limit"`
+	RPDLimit        int                  `json:"rpd_limit"`
+	RequestMade     int                  `json:"request_made"`
+	UsagePct        int                  `json:"usage_pct"`
+	LastUsedAt      string               `json:"last_used_at,omitempty"`
+	LastError       string               `json:"last_error,omitempty"`
+	CreatedAt       string               `json:"created_at"`
+	ModelUsage      []ModelUsageResponse `json:"model_usage,omitempty"`
+}
+
+func toAPIKeyResponse(k *entity.APIKey, usage []port.ModelUsage) APIKeyResponse {
 	usagePct := 0
 	if k.RPDLimit() > 0 {
 		usagePct = k.RequestMade() * 100 / k.RPDLimit()
@@ -113,13 +121,34 @@ func toAPIKeyResponse(k *entity.APIKey) APIKeyResponse {
 	if k.LastUsedAt() != nil {
 		r.LastUsedAt = k.LastUsedAt().Format("2006-01-02 15:04")
 	}
+	r.ModelUsage = toModelUsageResponses(usage)
 	return r
 }
 
-func toAPIKeyResponses(keys []*entity.APIKey) []APIKeyResponse {
+func toModelUsageResponses(usage []port.ModelUsage) []ModelUsageResponse {
+	result := make([]ModelUsageResponse, len(usage))
+	for i, u := range usage {
+		pct := 0
+		if u.RPDLimit > 0 {
+			pct = u.RequestMade * 100 / u.RPDLimit
+			if pct > 100 {
+				pct = 100
+			}
+		}
+		result[i] = ModelUsageResponse{
+			Model:       u.Model,
+			RequestMade: u.RequestMade,
+			RPDLimit:    u.RPDLimit,
+			UsagePct:    pct,
+		}
+	}
+	return result
+}
+
+func toAPIKeyResponses(keys []port.APIKeyWithUsage) []APIKeyResponse {
 	result := make([]APIKeyResponse, len(keys))
-	for i, k := range keys {
-		result[i] = toAPIKeyResponse(k)
+	for i, kw := range keys {
+		result[i] = toAPIKeyResponse(kw.Key, kw.ModelUsage)
 	}
 	return result
 }

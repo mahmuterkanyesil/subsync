@@ -137,6 +137,25 @@ func (s *StatsService) ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error
 	return s.apiKeyRepo.FindAll(ctx)
 }
 
+func (s *StatsService) ListAPIKeysWithUsage(ctx context.Context) ([]port.APIKeyWithUsage, error) {
+	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
+	keys, err := s.apiKeyRepo.FindAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]port.APIKeyWithUsage, len(keys))
+	for i, k := range keys {
+		usage, _ := s.apiKeyRepo.FindAllModelUsage(ctx, k.ID())
+		for j := range usage {
+			if spec, ok := knownModelSpecs[usage[j].Model]; ok {
+				usage[j].RPDLimit = spec.rpd
+			}
+		}
+		result[i] = port.APIKeyWithUsage{Key: k, ModelUsage: usage}
+	}
+	return result, nil
+}
+
 func (s *StatsService) RefreshKeyStatuses(ctx context.Context) error {
 	return s.apiKeyRepo.ResetExpiredQuotas(ctx)
 }

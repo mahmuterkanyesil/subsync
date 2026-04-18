@@ -29,6 +29,7 @@ type StatsUseCase interface {
 	DisableApiKey(ctx context.Context, id int) error
 	ResetQuotaApiKey(ctx context.Context, id int) error
 	ListAPIKeys(ctx context.Context) ([]*entity.APIKey, error)
+	ListAPIKeysWithUsage(ctx context.Context) ([]APIKeyWithUsage, error)
 	DeleteAPIKey(ctx context.Context, id int) error
 	ActivateAPIKey(ctx context.Context, id int) error
 	ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)

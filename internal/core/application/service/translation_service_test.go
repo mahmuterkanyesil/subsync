@@ -116,6 +116,7 @@ func TestTranslationService_Translate_HappyPath_SingleBatch(t *testing.T) {
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
 		Return(translated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
@@ -160,6 +161,7 @@ func TestTranslationService_Translate_ResumeFromProgress(t *testing.T) {
 		return len(blocks) == 1
 	}), key.KeyValue(), mock.Anything).Return(remainingTranslated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
@@ -197,6 +199,7 @@ func TestTranslationService_Translate_ValidationFails_TransitionsToError(t *test
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
 		Return(englishBlocks, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
@@ -237,6 +240,7 @@ func TestTranslationService_Translate_RPD_FallsBackToNextModel(t *testing.T) {
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
 		Return(translated, nil).Once()
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
@@ -369,6 +373,7 @@ func TestTranslationService_Translate_PublishesEventOnSuccess(t *testing.T) {
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
 		Return(translated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)

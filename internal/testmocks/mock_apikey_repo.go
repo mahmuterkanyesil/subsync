@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/mock"
+	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 )
 
@@ -54,4 +55,20 @@ func (m *MockAPIKeyRepository) FindEarliestQuotaReset(ctx context.Context, servi
 
 func (m *MockAPIKeyRepository) Delete(ctx context.Context, id int) error {
 	return m.Called(ctx, id).Error(0)
+}
+
+func (m *MockAPIKeyRepository) IncrementModelUsage(ctx context.Context, keyID int, model string) error {
+	return m.Called(ctx, keyID, model).Error(0)
+}
+
+func (m *MockAPIKeyRepository) FindAllModelUsage(ctx context.Context, keyID int) ([]port.ModelUsage, error) {
+	args := m.Called(ctx, keyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]port.ModelUsage), args.Error(1)
+}
+
+func (m *MockAPIKeyRepository) ResetExpiredModelUsages(ctx context.Context) error {
+	return m.Called(ctx).Error(0)
 }

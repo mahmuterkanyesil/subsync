@@ -75,7 +75,7 @@ func (s *HTTPServer) webKeys(c *gin.Context) {
 	flash := c.Query("flash")
 	msg := c.Query("msg")
 
-	keys, err := s.statsUseCase.ListAPIKeys(c.Request.Context())
+	keys, err := s.statsUseCase.ListAPIKeysWithUsage(c.Request.Context())
 	if err != nil {
 		c.String(http.StatusInternalServerError, "error: %v", err)
 		return

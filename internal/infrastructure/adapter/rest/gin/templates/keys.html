@@ -70,10 +70,16 @@
           </td>
           <td style="font-size:0.8rem;color:#9ca3af">{{.RPMLimit}} / {{.TPMLimit}} / {{.RPDLimit}}</td>
           <td>
-            <div style="font-size:0.75rem;color:#9ca3af;margin-bottom:3px">{{.RequestMade}} / {{.RPDLimit}}</div>
-            <div style="background:#374151;border-radius:4px;height:6px;width:80px">
-              <div style="background:{{if ge .UsagePct 90}}#ef4444{{else if ge .UsagePct 50}}#f59e0b{{else}}#10b981{{end}};border-radius:4px;height:6px;width:{{.UsagePct}}%"></div>
+            {{range .ModelUsage}}
+            <div style="font-size:0.72rem;margin-bottom:5px">
+              <div style="color:#9ca3af;margin-bottom:2px">{{.Model}}: {{.RequestMade}}/{{.RPDLimit}}</div>
+              <div style="background:#374151;border-radius:4px;height:5px;width:80px">
+                <div style="background:{{if ge .UsagePct 90}}#ef4444{{else if ge .UsagePct 50}}#f59e0b{{else}}#10b981{{end}};border-radius:4px;height:5px;width:{{.UsagePct}}%"></div>
+              </div>
             </div>
+            {{else}}
+            <span style="color:#9ca3af;font-size:0.75rem">—</span>
+            {{end}}
           </td>
           <td>{{if .LastUsedAt}}{{.LastUsedAt}}{{else}}<span style="color:#9ca3af">—</span>{{end}}</td>
           <td style="white-space:nowrap">
