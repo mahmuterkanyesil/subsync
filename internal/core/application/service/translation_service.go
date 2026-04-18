@@ -10,6 +10,7 @@ import (
 	"subsync/internal/core/domain/event"
 	"subsync/internal/core/domain/valueobject"
 	domainservice "subsync/internal/core/domain/service"
+	"subsync/pkg/logger"
 	"subsync/pkg/srt"
 	"time"
 )
@@ -96,6 +97,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 	}
 
 	blocks := srt.Parse(string(content))
+	name := filepath.Base(engPath)
 
 	translated, hasProgress, err := s.progress.Load(ctx, engPath)
 	if err != nil {
@@ -103,9 +105,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 	}
 	if !hasProgress {
 		translated = []port.SRTBlock{}
+	} else {
+		logger.Info("translate resume: %s — %d/%d blocks done", name, len(translated), len(blocks))
 	}
 
 	remaining := blocks[len(translated):]
+	totalBatches := (len(remaining) + s.batchSize - 1) / s.batchSize
+	batchNum := 0
+
+	logger.Info("translate start: %s — %d blocks, %d batches", name, len(blocks), totalBatches)
 
 	for i := 0; i < len(remaining); {
 		end := i + s.batchSize
@@ -121,6 +129,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			if wait < 0 {
 				wait = 30 * time.Second
 			}
+			logger.Warn("translate: all models exhausted for %s — waiting %s", name, wait.Round(time.Second))
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -136,11 +145,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 			return fmt.Errorf("no active api keys configured for service gemini")
 		}
 
+		batchNum++
+		logger.Info("translate batch %d/%d: %s [model=%s key=%d]", batchNum, totalBatches, name, currentModel, apiKey.ID())
+
 		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), currentModel)
 		if err != nil {
 			errStr := err.Error()
 			switch {
 			case strings.Contains(errStr, "quota_exhausted_rpm"):
+				logger.Warn("translate: RPM quota hit for %s [model=%s] — waiting 60s", name, currentModel)
 				_ = s.progress.Save(ctx, engPath, translated)
 				select {
 				case <-ctx.Done():
@@ -151,12 +164,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 			case strings.Contains(errStr, "quota_exhausted_rpd"),
 				strings.Contains(errStr, "quota_exhausted"):
+				logger.Warn("translate: RPD quota hit for %s [model=%s] — switching model", name, currentModel)
 				s.exhaustedModels[currentModel] = time.Now().Add(24 * time.Hour)
 				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 				_ = os.Remove(trPath)
+				batchNum--
 				continue
 
 			default:
+				logger.Error("translate error for %s: %v", name, err)
 				_ = s.progress.Save(ctx, engPath, translated)
 				return err
 			}
@@ -210,6 +226,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		return err
 	}
 
+	logger.Info("translate done: %s — %d blocks", name, len(translated))
 	s.publish(event.NewTranslationCompleted(engPath))
 	return nil
 }

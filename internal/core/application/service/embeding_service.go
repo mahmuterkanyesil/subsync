@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/event"
 	domainservice "subsync/internal/core/domain/service"
 	"subsync/internal/core/domain/valueobject"
+	"subsync/pkg/logger"
 	"subsync/pkg/srt"
 	"sync"
 )
@@ -78,8 +80,11 @@ func (s *EmbeddingService) EmbedPending(ctx context.Context) error {
 }
 
 func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtitle) {
+	name := filepath.Base(subtitle.EngPath())
+
 	videoPath, err := findVideoPath(subtitle.EngPath())
 	if err != nil {
+		logger.Warn("embed: video not found for %s", name)
 		_ = subtitle.TransitionTo(valueobject.StatusEmbedFailed)
 		subtitle.MarkError(port.ErrVideoNotFound)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
@@ -90,6 +95,7 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	// Already embedded?
 	hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, videoPath)
 	if err == nil && hasTr {
+		logger.Info("embed: already has TR sub, marking embedded: %s", name)
 		subtitle.MarkEmbedded()
 		_ = s.subtitleRepo.Save(ctx, subtitle)
 		s.publish(event.NewEmbeddingCompleted(subtitle.EngPath(), videoPath))
@@ -98,6 +104,7 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 
 	// eng.srt > 2MB = corrupt
 	if info, statErr := os.Stat(subtitle.EngPath()); statErr == nil && info.Size() > 2*1024*1024 {
+		logger.Warn("embed: eng.srt too large (%dMB): %s", info.Size()/1024/1024, name)
 		_ = subtitle.TransitionTo(valueobject.StatusEmbedFailed)
 		subtitle.MarkError(port.ErrEngSrtTooLarge)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
@@ -109,6 +116,7 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	trPath := engPath[:len(engPath)-len(".eng.srt")] + ".tr.srt"
 
 	if anomalyErr := s.checkSubtitleAnomaly(engPath, trPath); anomalyErr != nil {
+		logger.Warn("embed: anomaly check failed for %s — %v", name, anomalyErr)
 		if errors.Is(anomalyErr, os.ErrNotExist) {
 			_ = subtitle.TransitionTo(valueobject.StatusQueued)
 		} else {
@@ -121,11 +129,14 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 		return
 	}
 
+	logger.Info("embed start: %s → %s", name, filepath.Base(videoPath))
 	if embedErr := s.videoProcessor.EmbedSubtitle(ctx, videoPath, trPath); embedErr != nil {
+		logger.Error("embed failed: %s — %v", name, embedErr)
 		s.handleEmbedError(ctx, subtitle, videoPath, embedErr)
 		return
 	}
 
+	logger.Info("embed done: %s", name)
 	subtitle.MarkEmbedded()
 	_ = s.subtitleRepo.Save(ctx, subtitle)
 	s.publish(event.NewEmbeddingCompleted(subtitle.EngPath(), videoPath))
