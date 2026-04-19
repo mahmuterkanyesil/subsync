@@ -93,7 +93,7 @@ func parseSRTFileBlockCount(path string) int {
 	return len(srt.Parse(string(data)))
 }
 
-func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath string) (bool, error) {
+func (f *FFmpegProcessor) HasTargetSubtitle(ctx context.Context, videoPath, langFFmpegCode string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
@@ -107,7 +107,7 @@ func (f *FFmpegProcessor) HasTurkishSubtitle(ctx context.Context, videoPath stri
 		return false, err
 	}
 	output := strings.ToLower(string(out))
-	return strings.Contains(output, "\"tur\"") || strings.Contains(output, "turkish"), nil
+	return strings.Contains(output, "\""+strings.ToLower(langFFmpegCode)+"\""), nil
 }
 
 func (f *FFmpegProcessor) EnsureEngSubtitle(ctx context.Context, videoPath string) (string, error) {
@@ -214,7 +214,7 @@ func (f *FFmpegProcessor) probeOK(ctx context.Context, path string) bool {
 	return err == nil && strings.TrimSpace(string(out)) != ""
 }
 
-func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, srtPath string) error {
+func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath, srtPath, langFFmpegCode, langNameEN string) error {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		return port.ErrFFmpegNotFound
 	}
@@ -241,8 +241,8 @@ func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, s
 			"-i", videoPath, "-i", srtPath,
 			"-map", "0", "-map", "1:0",
 			"-c:v", "copy", "-c:a", "copy", "-c:s", "copy",
-			"-metadata:s:s:"+newIndex, "language=tur",
-			"-metadata:s:s:"+newIndex, "title=Turkish (Subsync)",
+			"-metadata:s:s:"+newIndex, "language="+langFFmpegCode,
+			"-metadata:s:s:"+newIndex, "title="+langNameEN+" (Subsync)",
 			tmpPath, "-y",
 		)
 	} else {
@@ -250,8 +250,8 @@ func (f *FFmpegProcessor) EmbedSubtitle(ctx context.Context, videoPath string, s
 			"-i", videoPath, "-i", srtPath,
 			"-map", "0:v?", "-map", "0:a?", "-map", "1:0",
 			"-c:v", "copy", "-c:a", "copy", "-c:s", "mov_text",
-			"-metadata:s:s:0", "language=tur",
-			"-metadata:s:s:0", "title=Turkish (Subsync)",
+			"-metadata:s:s:0", "language="+langFFmpegCode,
+			"-metadata:s:s:0", "title="+langNameEN+" (Subsync)",
 			tmpPath, "-y",
 		)
 	}

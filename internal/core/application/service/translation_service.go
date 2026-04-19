@@ -78,7 +78,15 @@ func (s *TranslationService) publish(e event.DomainEvent) {
 	}
 }
 
-func (s *TranslationService) Translate(ctx context.Context, engPath string) error {
+func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang string) error {
+	if targetLang == "" {
+		targetLang = "tr"
+	}
+	lang, ok := valueobject.LookupLanguage(targetLang)
+	if !ok {
+		lang = valueobject.DefaultLanguage()
+	}
+
 	// Reset any RPD quotas that have passed their reset time before attempting translation.
 	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
 
@@ -91,9 +99,9 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		return nil
 	}
 
-	// If .tr.srt already exists, translation completed in a prior run but the
+	// If translated srt already exists, translation completed in a prior run but the
 	// DB save failed (e.g. SQLITE_BUSY). Recover by updating status only.
-	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
+	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + lang.Code + ".srt"
 	if _, statErr := os.Stat(trPath); statErr == nil {
 		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr == nil {
 			if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr == nil {
@@ -128,7 +136,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 	totalBatches := (len(remaining) + s.batchSize - 1) / s.batchSize
 	batchNum := 0
 
-	logger.Info("translate start: %s — %d blocks, %d batches", name, len(blocks), totalBatches)
+	logger.Info("translate start: %s — %d blocks, %d batches [lang=%s]", name, len(blocks), totalBatches, targetLang)
 
 	for i := 0; i < len(remaining); {
 		end := i + s.batchSize
@@ -162,9 +170,9 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		}
 
 		batchNum++
-		logger.Info("translate batch %d/%d: %s [model=%s key=%d]", batchNum, totalBatches, name, currentModel, apiKey.ID())
+		logger.Info("translate batch %d/%d: %s [model=%s key=%d lang=%s]", batchNum, totalBatches, name, currentModel, apiKey.ID(), targetLang)
 
-		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), currentModel)
+		result, err := s.translator.TranslateBatch(ctx, batch, apiKey.KeyValue(), currentModel, targetLang)
 		if err != nil {
 			errStr := err.Error()
 			switch {
@@ -182,7 +190,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 				strings.Contains(errStr, "quota_exhausted"):
 				logger.Warn("translate: RPD quota hit for %s [model=%s] — switching model", name, currentModel)
 				s.exhaustedModels[currentModel] = time.Now().Add(24 * time.Hour)
-				trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 				_ = os.Remove(trPath)
 				batchNum--
 				continue
@@ -220,17 +227,16 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		return validationErr
 	}
 
-	// Domain service ile doğrula
 	texts := make([]string, len(translated))
 	for i := range translated {
 		texts[i] = translated[i].Text
 	}
-	if !domainservice.IsTranslatedToTurkish(texts) {
-		notTurkishErr := fmt.Errorf("translation validation failed: not turkish")
-		subtitle.MarkError(notTurkishErr)
+	if !domainservice.IsTranslatedToLanguage(texts, targetLang) {
+		notLangErr := fmt.Errorf("translation validation failed: not %s", lang.NameEN)
+		subtitle.MarkError(notLangErr)
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
-		return notTurkishErr
+		return notLangErr
 	}
 
 	if err := os.WriteFile(trPath, []byte(srt.Format(translated)), 0644); err != nil {
@@ -247,7 +253,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 	// the saved blocks instead of restarting from scratch.
 	_ = s.progress.Clear(ctx, engPath)
 
-	logger.Info("translate done: %s — %d blocks", name, len(translated))
+	logger.Info("translate done: %s — %d blocks [lang=%s]", name, len(translated), targetLang)
 	s.publish(event.NewTranslationCompleted(engPath))
 	return nil
 }

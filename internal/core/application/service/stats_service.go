@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
 )
+
 
 type modelSpec struct{ rpm, tpm, rpd int }
 
@@ -32,6 +34,7 @@ type StatsService struct {
 	apiKeyRepo   port.APIKeyRepository
 	watchDirRepo port.WatchDirRepository
 	taskQueue    port.TaskQueue
+	settingsRepo port.AppSettingsRepository
 }
 
 func NewStatsService(
@@ -39,12 +42,14 @@ func NewStatsService(
 	apiKeyRepo port.APIKeyRepository,
 	watchDirRepo port.WatchDirRepository,
 	taskQueue port.TaskQueue,
+	settingsRepo port.AppSettingsRepository,
 ) *StatsService {
 	return &StatsService{
 		subtitleRepo: subtitleRepo,
 		apiKeyRepo:   apiKeyRepo,
 		watchDirRepo: watchDirRepo,
 		taskQueue:    taskQueue,
+		settingsRepo: settingsRepo,
 	}
 }
 
@@ -64,6 +69,25 @@ func (s *StatsService) DeleteSubtitle(ctx context.Context, engPath string) error
 	return s.subtitleRepo.Delete(ctx, engPath)
 }
 
+func (s *StatsService) GetTargetLanguage(ctx context.Context) string {
+	if s.settingsRepo != nil {
+		if v, err := s.settingsRepo.GetSetting(ctx, "target_language"); err == nil && v != "" {
+			return v
+		}
+	}
+	return "tr"
+}
+
+func (s *StatsService) SetTargetLanguage(ctx context.Context, code string) error {
+	if _, ok := valueobject.LookupLanguage(code); !ok {
+		return fmt.Errorf("unsupported language code: %s", code)
+	}
+	if s.settingsRepo == nil {
+		return fmt.Errorf("settings repository not available")
+	}
+	return s.settingsRepo.SetSetting(ctx, "target_language", code)
+}
+
 func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
 	if err != nil {
@@ -76,7 +100,8 @@ func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 		return err
 	}
 	return s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
-		EngPath: engPath,
+		EngPath:        engPath,
+		TargetLanguage: s.GetTargetLanguage(ctx),
 	})
 }
 

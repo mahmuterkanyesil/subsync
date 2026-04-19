@@ -13,6 +13,54 @@ var (
 	turkishCommon = []string{"ç", "ö", "ü", "Ç", "Ö", "Ü"}
 )
 
+// languageMarkers maps ISO 639-1 codes to distinctive characters for that language.
+// Languages without entries (e.g. Latin-script languages) skip marker validation.
+var languageMarkers = map[string][]string{
+	"tr": nil, // handled separately via turkishUnique/turkishCommon logic
+	"ru": {"ж", "ю", "я", "э"},
+	"ar": {"ع", "ح", "خ"},
+	"ja": {"の", "は", "が", "を"},
+	"ko": {"이", "가", "은"},
+	"zh": {"的", "是", "在"},
+	"es": {"ñ", "¿", "¡"},
+}
+
+// IsTranslatedToLanguage validates that the given subtitle text blocks are in the specified language.
+// For languages without known markers it returns true (trusts the model).
+func IsTranslatedToLanguage(texts []string, langCode string) bool {
+	if len(texts) == 0 {
+		return false
+	}
+
+	if langCode == "tr" {
+		return IsTranslatedToTurkish(texts)
+	}
+
+	// Strategic sampling: beginning, 25%, middle, 75%, end
+	indices := []int{0, len(texts) / 4, len(texts) / 2, 3 * len(texts) / 4, len(texts) - 1}
+	seen := map[int]bool{}
+	var sampleParts []string
+	for _, i := range indices {
+		if i >= 0 && i < len(texts) && !seen[i] {
+			sampleParts = append(sampleParts, texts[i])
+			seen[i] = true
+		}
+	}
+	sample := strings.Join(sampleParts, " ")
+
+	markers, hasMarkers := languageMarkers[langCode]
+	if !hasMarkers || len(markers) == 0 {
+		return true // no markers defined — trust model
+	}
+
+	for _, m := range markers {
+		if strings.Contains(sample, m) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsTranslatedToTurkish validates that the given subtitle text blocks are in Turkish.
 // Samples strategically from the beginning, quarter, middle, three-quarter, and end of
 // the block list to catch cases where only part of the translation is in Turkish.

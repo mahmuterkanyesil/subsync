@@ -22,13 +22,13 @@ var (
 )
 
 type TranslationProvider interface {
-	TranslateBatch(ctx context.Context, blocks []SRTBlock, keyValue, model string) ([]SRTBlock, error)
+	TranslateBatch(ctx context.Context, blocks []SRTBlock, keyValue, model, targetLang string) ([]SRTBlock, error)
 }
 
 type VideoProcessor interface {
 	EnsureEngSubtitle(ctx context.Context, videoPath string) (string, error)
-	EmbedSubtitle(ctx context.Context, videoPath string, srtPath string) error
-	HasTurkishSubtitle(ctx context.Context, videoPath string) (bool, error)
+	EmbedSubtitle(ctx context.Context, videoPath, srtPath, langFFmpegCode, langNameEN string) error
+	HasTargetSubtitle(ctx context.Context, videoPath, langFFmpegCode string) (bool, error)
 }
 
 type ProgressStore interface {

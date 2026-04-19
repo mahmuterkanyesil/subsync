@@ -29,10 +29,11 @@ func main() {
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	watchDirRepo := sqlite.NewSQLiteWatchDirRepository(db)
+	settingsRepo := sqlite.NewSQLiteAppSettingsRepository(db)
 	videoProcessor := ffmpeg.NewFFmpegProcessor()
 	taskQueue := asynq.NewAsynqTaskQueue(cfg.RedisURL)
 
-	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs, watchDirRepo)
+	scanner := service.NewScanningService(subtitleRepo, videoProcessor, taskQueue, cfg.WatchDirs, watchDirRepo, settingsRepo)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

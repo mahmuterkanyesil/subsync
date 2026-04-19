@@ -7,6 +7,41 @@ import (
 	domainservice "subsync/internal/core/domain/service"
 )
 
+func TestIsTranslatedToLanguage_DelegatesToTurkishForTr(t *testing.T) {
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"Şimdi buradayım"}, "tr"))
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{"He went to the store"}, "tr"))
+}
+
+func TestIsTranslatedToLanguage_Russian(t *testing.T) {
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"Привет мир ж"}, "ru"))
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{"Hello world"}, "ru"))
+}
+
+func TestIsTranslatedToLanguage_Arabic(t *testing.T) {
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"مرحبا ع"}, "ar"))
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{"Hello world"}, "ar"))
+}
+
+func TestIsTranslatedToLanguage_Japanese(t *testing.T) {
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"こんにちはの"}, "ja"))
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{"Hello world"}, "ja"))
+}
+
+func TestIsTranslatedToLanguage_Spanish(t *testing.T) {
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"¡Hola amigo!"}, "es"))
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{"Hello world"}, "es"))
+}
+
+func TestIsTranslatedToLanguage_UnknownCode_ReturnsTrue(t *testing.T) {
+	// Unknown language codes have no markers → trust the model
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"anything"}, "xx"))
+	assert.True(t, domainservice.IsTranslatedToLanguage([]string{"Hello world"}, "it"))
+}
+
+func TestIsTranslatedToLanguage_EmptyTexts_ReturnsFalse(t *testing.T) {
+	assert.False(t, domainservice.IsTranslatedToLanguage([]string{}, "ru"))
+}
+
 func TestIsTranslatedToTurkish(t *testing.T) {
 	tests := []struct {
 		name   string

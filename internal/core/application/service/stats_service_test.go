@@ -24,7 +24,7 @@ func newStatsService(
 	wdRepo *testmocks.MockWatchDirRepository,
 	queue *testmocks.MockTaskQueue,
 ) *StatsService {
-	return NewStatsService(subRepo, keyRepo, wdRepo, queue)
+	return NewStatsService(subRepo, keyRepo, wdRepo, queue, nil)
 }
 
 func makeSubtitle(t *testing.T, status valueobject.SubtitleStatus, embedded bool) *entity.Subtitle {
@@ -104,7 +104,9 @@ func TestStatsService_ReTranslate_TransitionsToQueued_ThenEnqueues(t *testing.T)
 
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
-	queue.On("Enqueue", mock.Anything, "translate_srt", port.TranslateTask{EngPath: engPath}).Return(nil)
+	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
+		return task.EngPath == engPath
+	})).Return(nil)
 
 	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, queue)
 	err := svc.ReTranslate(context.Background(), engPath)

@@ -17,10 +17,12 @@ import (
 	"sync"
 )
 
+
 type EmbeddingService struct {
 	subtitleRepo   port.SubtitleRepository
 	videoProcessor port.VideoProcessor
 	events         port.EventPublisher
+	settingsRepo   port.AppSettingsRepository
 	mu             sync.Mutex
 	inProgress     map[string]struct{}
 }
@@ -29,11 +31,13 @@ func NewEmbeddingService(
 	subtitleRepo port.SubtitleRepository,
 	videoProcessor port.VideoProcessor,
 	events port.EventPublisher,
+	settingsRepo port.AppSettingsRepository,
 ) *EmbeddingService {
 	return &EmbeddingService{
 		subtitleRepo:   subtitleRepo,
 		videoProcessor: videoProcessor,
 		events:         events,
+		settingsRepo:   settingsRepo,
 		inProgress:     make(map[string]struct{}),
 	}
 }
@@ -79,8 +83,20 @@ func (s *EmbeddingService) EmbedPending(ctx context.Context) error {
 	return nil
 }
 
+func (s *EmbeddingService) targetLanguage(ctx context.Context) valueobject.LanguageSpec {
+	if s.settingsRepo != nil {
+		if v, err := s.settingsRepo.GetSetting(ctx, "target_language"); err == nil && v != "" {
+			if lang, ok := valueobject.LookupLanguage(v); ok {
+				return lang
+			}
+		}
+	}
+	return valueobject.DefaultLanguage()
+}
+
 func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtitle) {
 	name := filepath.Base(subtitle.EngPath())
+	lang := s.targetLanguage(ctx)
 
 	videoPath, err := findVideoPath(subtitle.EngPath())
 	if err != nil {
@@ -93,9 +109,9 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	}
 
 	// Already embedded?
-	hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, videoPath)
-	if err == nil && hasTr {
-		logger.Info("embed: already has TR sub, marking embedded: %s", name)
+	hasTarget, err := s.videoProcessor.HasTargetSubtitle(ctx, videoPath, lang.FFmpegCode)
+	if err == nil && hasTarget {
+		logger.Info("embed: already has %s sub, marking embedded: %s", lang.Code, name)
 		subtitle.MarkEmbedded()
 		_ = s.subtitleRepo.Save(ctx, subtitle)
 		s.publish(event.NewEmbeddingCompleted(subtitle.EngPath(), videoPath))
@@ -113,7 +129,7 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	}
 
 	engPath := subtitle.EngPath()
-	trPath := engPath[:len(engPath)-len(".eng.srt")] + ".tr.srt"
+	trPath := engPath[:len(engPath)-len(".eng.srt")] + "." + lang.Code + ".srt"
 
 	if anomalyErr := s.checkSubtitleAnomaly(engPath, trPath); anomalyErr != nil {
 		logger.Warn("embed: anomaly check failed for %s — %v", name, anomalyErr)
@@ -129,8 +145,8 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 		return
 	}
 
-	logger.Info("embed start: %s → %s", name, filepath.Base(videoPath))
-	if embedErr := s.videoProcessor.EmbedSubtitle(ctx, videoPath, trPath); embedErr != nil {
+	logger.Info("embed start: %s → %s [lang=%s]", name, filepath.Base(videoPath), lang.Code)
+	if embedErr := s.videoProcessor.EmbedSubtitle(ctx, videoPath, trPath, lang.FFmpegCode, lang.NameEN); embedErr != nil {
 		logger.Error("embed failed: %s — %v", name, embedErr)
 		s.handleEmbedError(ctx, subtitle, videoPath, embedErr)
 		return

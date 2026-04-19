@@ -42,5 +42,5 @@ func (s *AsynqWorkerServer) handleTranslate(ctx context.Context, task *asynq.Tas
 		log.Printf("translate_srt: missing eng_path")
 		return nil
 	}
-	return s.translationUseCase.Translate(ctx, payload.EngPath)
+	return s.translationUseCase.Translate(ctx, payload.EngPath, payload.TargetLanguage)
 }

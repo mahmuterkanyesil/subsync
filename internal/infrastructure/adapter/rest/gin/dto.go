@@ -3,6 +3,7 @@ package gin
 import (
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
+	"subsync/internal/core/domain/valueobject"
 )
 
 // SubtitleResponse, Subtitle entity'sinin REST katmanına açılan DTO'sudur.
@@ -174,10 +175,12 @@ func toWatchDirResponses(dirs []*entity.WatchDir) []WatchDirResponse {
 }
 
 type SettingsData struct {
-	CurrentPage string
-	WatchDirs   []WatchDirResponse
-	Flash       string
-	FlashOK     bool
+	CurrentPage        string
+	WatchDirs          []WatchDirResponse
+	Flash              string
+	FlashOK            bool
+	TargetLanguage     string
+	SupportedLanguages []valueobject.LanguageSpec
 }
 
 type DashboardData struct {

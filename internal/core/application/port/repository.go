@@ -28,6 +28,11 @@ type SubtitleRepository interface {
 	Delete(ctx context.Context, engPath string) error
 }
 
+type AppSettingsRepository interface {
+	GetSetting(ctx context.Context, key string) (string, error)
+	SetSetting(ctx context.Context, key, value string) error
+}
+
 type WatchDirRepository interface {
 	FindAll(ctx context.Context) ([]*entity.WatchDir, error)
 	FindEnabled(ctx context.Context) ([]string, error)

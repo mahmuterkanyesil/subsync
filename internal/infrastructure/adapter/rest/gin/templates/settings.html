@@ -7,6 +7,23 @@
 {{end}}
 
 <div class="card">
+  <h2>Translation Language</h2>
+  <p style="margin:.5rem 0 1.25rem;color:#6b7280;font-size:.9rem;">
+    Select the target language for subtitle translation.
+  </p>
+  <form method="POST" action="/settings/language" class="form-inline">
+    <select name="lang_code" style="flex:1;min-width:200px">
+      {{range .SupportedLanguages}}
+      <option value="{{.Code}}" {{if eq .Code $.TargetLanguage}}selected{{end}}>
+        {{.NameEN}} ({{.NameNative}})
+      </option>
+      {{end}}
+    </select>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>Watch Directories</h2>
   <p style="margin:.5rem 0 1.25rem;color:#6b7280;font-size:.9rem;">
     Agent bu klasörleri periyodik olarak tarayarak yeni video dosyalarını tespit eder.

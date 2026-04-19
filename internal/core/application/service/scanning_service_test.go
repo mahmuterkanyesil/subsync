@@ -46,7 +46,7 @@ func newScanSvc(
 	watchDirs []string,
 	wdRepo port.WatchDirRepository,
 ) *ScanningService {
-	return NewScanningService(subRepo, vp, queue, watchDirs, wdRepo)
+	return NewScanningService(subRepo, vp, queue, watchDirs, wdRepo, nil)
 }
 
 // ---- extractSxxExx whitebox tests ----
@@ -101,7 +101,7 @@ func TestScanningService_Scan_SkipsNonVideoFiles(t *testing.T) {
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
 	vp := &testmocks.MockVideoProcessor{}
 	// HasTurkishSubtitle must NOT be called for non-.mkv/.mp4 files
-	vp.AssertNotCalled(t, "HasTurkishSubtitle")
+	vp.AssertNotCalled(t, "HasTargetSubtitle")
 
 	svc := newScanSvc(subRepo, vp, &testmocks.MockTaskQueue{}, []string{dir}, nil)
 	err := svc.Scan(context.Background())
@@ -118,7 +118,7 @@ func TestScanningService_Scan_SkipsIfHasTurkishSubtitle(t *testing.T) {
 	queue := &testmocks.MockTaskQueue{}
 	defer vp.AssertExpectations(t)
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(true, nil)
 	// EnsureEngSubtitle must NOT be called
 	vp.AssertNotCalled(t, "EnsureEngSubtitle")
 	queue.AssertNotCalled(t, "Enqueue")
@@ -141,7 +141,7 @@ func TestScanningService_Scan_SkipsExistingQueuedSubtitle(t *testing.T) {
 
 	existing := makeSubtitleAt(t, engPath, valueobject.StatusQueued)
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(existing, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
@@ -165,7 +165,7 @@ func TestScanningService_Scan_SkipsExistingDoneSubtitle(t *testing.T) {
 
 	existing := makeSubtitleAt(t, engPath, valueobject.StatusDone)
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(existing, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
@@ -191,7 +191,7 @@ func TestScanningService_Scan_SkipsRelocatedViaSxxExx(t *testing.T) {
 	notFoundErr := errors.New("not found")
 	oldSubtitle := makeSubtitleAt(t, "/old/path/S03E07.eng.srt", valueobject.StatusDone)
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(nil, notFoundErr)
 	subRepo.On("FindBySxxExx", mock.Anything, 3, 7).Return([]*entity.Subtitle{oldSubtitle}, nil)
@@ -217,15 +217,14 @@ func TestScanningService_Scan_EnqueueAndSavesNewSubtitle(t *testing.T) {
 
 	notFoundErr := errors.New("not found")
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(nil, notFoundErr)
 	subRepo.On("FindBySxxExx", mock.Anything, 1, 1).Return([]*entity.Subtitle{}, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
-	queue.On("Enqueue", mock.Anything, "translate_srt", port.TranslateTask{
-		EngPath:   engPath,
-		VideoPath: videoPath,
-	}).Return(nil)
+	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
+		return task.EngPath == engPath && task.VideoPath == videoPath && task.TargetLanguage == "tr"
+	})).Return(nil)
 	subRepo.On("Save", mock.Anything, mock.AnythingOfType("*entity.Subtitle")).Return(nil)
 
 	svc := newScanSvc(subRepo, vp, queue, []string{dir}, nil)
@@ -248,8 +247,8 @@ func TestScanningService_Scan_BothMkvAndMp4_Processed(t *testing.T) {
 	defer vp.AssertExpectations(t)
 
 	// Both skipped because Turkish sub already exists
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(true, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mp4Path).Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mp4Path, "tur").Return(true, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
 
 	svc := newScanSvc(subRepo, vp, queue, []string{dir}, nil)
@@ -268,7 +267,7 @@ func TestScanningService_Scan_UsesWatchDirRepo(t *testing.T) {
 
 	// Repo returns the temp dir
 	wdRepo.On("FindEnabled", mock.Anything).Return([]string{dir}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mock.AnythingOfType("string")).Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil)
 
 	subRepo := &testmocks.MockSubtitleRepository{}
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
@@ -291,7 +290,7 @@ func TestScanningService_Scan_FallsBackToConfigDirs(t *testing.T) {
 
 	// Repo returns empty list → fallback to config dirs
 	wdRepo.On("FindEnabled", mock.Anything).Return([]string{}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mock.AnythingOfType("string")).Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil)
 
 	subRepo2 := &testmocks.MockSubtitleRepository{}
 	subRepo2.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
@@ -299,7 +298,7 @@ func TestScanningService_Scan_FallsBackToConfigDirs(t *testing.T) {
 	err := svc.Scan(context.Background())
 	require.NoError(t, err)
 
-	vp.AssertCalled(t, "HasTurkishSubtitle", mock.Anything, mock.AnythingOfType("string"))
+	vp.AssertCalled(t, "HasTargetSubtitle", mock.Anything, mock.AnythingOfType("string"), mock.AnythingOfType("string"))
 }
 
 func TestScanningService_Scan_SkipsWhenEngSubtitleExtractionFails(t *testing.T) {
@@ -311,7 +310,7 @@ func TestScanningService_Scan_SkipsWhenEngSubtitleExtractionFails(t *testing.T) 
 	queue := &testmocks.MockTaskQueue{}
 	defer vp.AssertExpectations(t)
 
-	vp.On("HasTurkishSubtitle", mock.Anything, videoPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return("", errors.New("no eng stream"))
 	queue.AssertNotCalled(t, "Enqueue")
 	subRepo.AssertNotCalled(t, "Save")

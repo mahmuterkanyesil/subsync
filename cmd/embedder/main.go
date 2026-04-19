@@ -27,12 +27,14 @@ func main() {
 	defer db.Close()
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
+	settingsRepo := sqlite.NewSQLiteAppSettingsRepository(db)
 	videoProcessor := ffmpeg.NewFFmpegProcessor()
 
 	embeddingService := service.NewEmbeddingService(
 		subtitleRepo,
 		videoProcessor,
 		eventadapter.NewLogEventPublisher(),
+		settingsRepo,
 	)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

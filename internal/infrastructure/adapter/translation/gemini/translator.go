@@ -6,13 +6,15 @@ import (
 	"regexp"
 	"strings"
 	"subsync/internal/core/application/port"
+	"subsync/internal/core/domain/valueobject"
 
 	"google.golang.org/genai"
 )
 
-const systemInstruction = `You are a professional subtitle translator. Your ONLY job is to translate subtitles into TURKISH language.
+func buildSystemInstruction(lang valueobject.LanguageSpec) string {
+	return fmt.Sprintf(`You are a professional subtitle translator. Your ONLY job is to translate subtitles into %s language.
 
-CRITICAL: OUTPUT LANGUAGE MUST BE TURKISH (Türkçe). NO OTHER LANGUAGE IS ACCEPTABLE.
+CRITICAL: OUTPUT LANGUAGE MUST BE %s (%s). NO OTHER LANGUAGE IS ACCEPTABLE.
 
 ### INPUT FORMAT:
 Each XML block has 3 parts:
@@ -30,18 +32,16 @@ cannot be fairly understood,
 
 ### YOUR TASK:
 1. KEEP subtitle number and timestamp UNCHANGED
-2. TRANSLATE dialogue text to TURKISH (Türkçe)
+2. TRANSLATE dialogue text to %s (%s)
 3. Source language can be ANY language (English, French, Spanish, Japanese, etc.)
-4. OUTPUT LANGUAGE: ALWAYS TURKISH (Türkçe) — NEVER output English, French, Spanish, or any other language
+4. OUTPUT LANGUAGE: ALWAYS %s (%s) — NEVER output English, French, Spanish, or any other language
 5. PRESERVE line breaks: 2 lines → 2 lines, 3 lines → 3 lines
 
-### TURKISH TRANSLATION STYLE:
-1. Natural, fluent Turkish suitable for movies/TV
-2. Informal "sen" for casual dialogue, friends, conflicts
-3. Formal "siz" only for official/hierarchical contexts
-4. Adapt idioms to Turkish equivalents
-5. Keep proper names unchanged (Neo, Oppenheimer, etc.)
-6. Keep sentence length similar to source
+### TRANSLATION STYLE for %s:
+1. Natural, fluent %s suitable for movies/TV
+2. Adapt idioms to %s equivalents
+3. Keep proper names unchanged (Neo, Oppenheimer, etc.)
+4. Keep sentence length similar to source
 
 ### TECHNICAL RULES:
 1. Return blocks in SAME <b id="N">...</b> tags
@@ -51,50 +51,21 @@ cannot be fairly understood,
 5. OUTPUT: Only XML blocks, no explanations
 6. Translate ALL blocks — if I send 500, return all 500
 
-REMINDER: OUTPUT LANGUAGE = TURKISH (Türkçe) ONLY!
+REMINDER: OUTPUT LANGUAGE = %s (%s) ONLY!
 
 CRITICAL:
 - If input has </b></font> at the end of dialogue, output MUST have </b></font> at the end!
-- You MUST return EVERY SINGLE block I send to you. DO NOT skip any blocks!
-
-### EXAMPLE 1 (Multi-line with tags):
-Input:
-<b id="0">
-2
-00:02:55,860 --> 00:02:59,450
-<font size="20"><b>THREAT LEVEL: DEMON
-SUPER MOUSE</b></font>
-</b>
-
-Output:
-<b id="0">
-2
-00:02:55,860 --> 00:02:59,450
-<font size="20"><b>TEHDİT SEVİYESİ: ŞEYTAN
-SÜPER FARE</b></font>
-</b>
-
-Notice:
-- 2 input lines → 2 output lines!
-- <font size="20"><b> preserved at start
-- </b></font> preserved at end!
-
-### EXAMPLE 2 (Simple multi-line):
-Input:
-<b id="1">
-17
-00:02:03,557 --> 00:02:05,227
-Well, I've only read
-the transcripts.
-</b>
-
-Output:
-<b id="1">
-17
-00:02:03,557 --> 00:02:05,227
-Şey, ben sadece
-transkriptleri okudum.
-</b>`
+- You MUST return EVERY SINGLE block I send to you. DO NOT skip any blocks!`,
+		lang.NameEN,
+		lang.NameEN, lang.NameNative,
+		lang.NameEN, lang.NameNative,
+		lang.NameEN, lang.NameNative,
+		lang.NameEN,
+		lang.NameEN,
+		lang.NameEN,
+		lang.NameEN, lang.NameNative,
+	)
+}
 
 // openingTagRe matches one or more opening HTML tags at the start of a line.
 var openingTagRe = regexp.MustCompile(`^(<[^/][^>]*>)+`)
@@ -135,7 +106,12 @@ type GeminiTranslator struct{}
 
 func NewGeminiTranslator() *GeminiTranslator { return &GeminiTranslator{} }
 
-func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue, model string) ([]port.SRTBlock, error) {
+func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRTBlock, keyValue, model, targetLang string) ([]port.SRTBlock, error) {
+	lang, ok := valueobject.LookupLanguage(targetLang)
+	if !ok {
+		lang = valueobject.DefaultLanguage()
+	}
+
 	client, err := genai.NewClient(ctx, &genai.ClientConfig{APIKey: keyValue})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gemini client: %w", err)
@@ -173,21 +149,25 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 	}
 
 	promptContent := fmt.Sprintf(
-		"CRITICAL: OUTPUT LANGUAGE MUST BE TURKISH (Türkçe)!\n\n"+
+		"CRITICAL: OUTPUT LANGUAGE MUST BE %s (%s)!\n\n"+
 			"INSTRUCTIONS:\n"+
-			"1. TRANSLATE ALL dialogue to TURKISH (Türkçe) — source can be any language\n"+
-			"2. OUTPUT LANGUAGE: TURKISH (Türkçe) ONLY\n"+
+			"1. TRANSLATE ALL dialogue to %s (%s) — source can be any language\n"+
+			"2. OUTPUT LANGUAGE: %s (%s) ONLY\n"+
 			"3. PRESERVE subtitle numbers and timestamps EXACTLY\n"+
 			"4. PRESERVE line breaks: 2 lines in source = 2 lines in output\n"+
 			"5. DO NOT merge lines!\n\n"+
-			"Translate these %d blocks to TURKISH (Türkçe):\n\n%s\n"+
-			"REMINDER: All dialogue MUST be in TURKISH (Türkçe) language!",
-		len(cleanBlocks), sb.String(),
+			"Translate these %d blocks to %s (%s):\n\n%s\n"+
+			"REMINDER: All dialogue MUST be in %s (%s) language!",
+		lang.NameEN, lang.NameNative,
+		lang.NameEN, lang.NameNative,
+		lang.NameEN, lang.NameNative,
+		len(cleanBlocks), lang.NameEN, lang.NameNative, sb.String(),
+		lang.NameEN, lang.NameNative,
 	)
 
 	temperature := float32(0.3)
 	result, err := client.Models.GenerateContent(ctx, model, genai.Text(promptContent), &genai.GenerateContentConfig{
-		SystemInstruction: genai.NewContentFromText(systemInstruction, genai.RoleUser),
+		SystemInstruction: genai.NewContentFromText(buildSystemInstruction(lang), genai.RoleUser),
 		Temperature:       &temperature,
 	})
 	if err != nil {

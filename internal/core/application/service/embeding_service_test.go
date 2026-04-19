@@ -101,7 +101,7 @@ func newEmbedSvc(
 	vp *testmocks.MockVideoProcessor,
 	events port.EventPublisher,
 ) *EmbeddingService {
-	return NewEmbeddingService(subRepo, vp, events)
+	return NewEmbeddingService(subRepo, vp, events, nil)
 }
 
 func TestEmbeddingService_EmbedPending_EmptyList_NoOp(t *testing.T) {
@@ -110,7 +110,7 @@ func TestEmbeddingService_EmbedPending_EmptyList_NoOp(t *testing.T) {
 	defer subRepo.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{}, nil)
-	vp.AssertNotCalled(t, "HasTurkishSubtitle")
+	vp.AssertNotCalled(t, "HasTargetSubtitle")
 	vp.AssertNotCalled(t, "EmbedSubtitle")
 
 	svc := newEmbedSvc(subRepo, vp, nil)
@@ -135,8 +135,8 @@ func TestEmbeddingService_EmbedPending_HappyPath_MkvFound(t *testing.T) {
 	defer events.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
-	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string")).Return(nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(false, nil)
+	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 	events.On("Publish", mock.MatchedBy(func(e event.DomainEvent) bool {
 		return e.EventName() == "embedding.completed"
@@ -172,7 +172,7 @@ func TestEmbeddingService_EmbedPending_VideoNotFound_TransitionsEmbedFailed(t *t
 
 	require.NoError(t, err)
 	assert.Equal(t, valueobject.StatusEmbedFailed, subtitle.Status())
-	vp.AssertNotCalled(t, "HasTurkishSubtitle")
+	vp.AssertNotCalled(t, "HasTargetSubtitle")
 }
 
 func TestEmbeddingService_EmbedPending_AlreadyHasTurkishSub_MarksEmbedded(t *testing.T) {
@@ -191,7 +191,7 @@ func TestEmbeddingService_EmbedPending_AlreadyHasTurkishSub_MarksEmbedded(t *tes
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
 	// Turkish subtitle already embedded → no EmbedSubtitle call
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(true, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(true, nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 	events.On("Publish", mock.MatchedBy(func(e event.DomainEvent) bool {
 		return e.EventName() == "embedding.completed"
@@ -227,7 +227,7 @@ func TestEmbeddingService_EmbedPending_EngSrtTooLarge_TransitionsEmbedFailed(t *
 	defer events.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(false, nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 	events.On("Publish", mock.MatchedBy(func(e event.DomainEvent) bool {
 		return e.EventName() == "embedding.failed"
@@ -254,8 +254,8 @@ func TestEmbeddingService_EmbedPending_FFmpegFailed_StaysInDone(t *testing.T) {
 	defer vp.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
-	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string")).Return(port.ErrFFmpegFailed)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(false, nil)
+	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(port.ErrFFmpegFailed)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newEmbedSvc(subRepo, vp, nil)
@@ -284,7 +284,7 @@ func TestEmbeddingService_EmbedPending_TrSrtNotFound_TransitionsQueued(t *testin
 	defer events.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(false, nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 	events.On("Publish", mock.MatchedBy(func(e event.DomainEvent) bool {
 		return e.EventName() == "embedding.failed"
@@ -309,7 +309,7 @@ func TestEmbeddingService_EmbedPending_DuplicateInProgress_Skipped(t *testing.T)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
 	// videoProcessor must NOT be called
-	vp.AssertNotCalled(t, "HasTurkishSubtitle")
+	vp.AssertNotCalled(t, "HasTargetSubtitle")
 	vp.AssertNotCalled(t, "EmbedSubtitle")
 
 	svc := newEmbedSvc(subRepo, vp, nil)
@@ -333,8 +333,8 @@ func TestEmbeddingService_EmbedPending_PublishesEmbeddingCompleted(t *testing.T)
 	defer events.AssertExpectations(t)
 
 	subRepo.On("FindPendingEmbed", mock.Anything).Return([]*entity.Subtitle{subtitle}, nil)
-	vp.On("HasTurkishSubtitle", mock.Anything, mkvPath).Return(false, nil)
-	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string")).Return(nil)
+	vp.On("HasTargetSubtitle", mock.Anything, mkvPath, "tur").Return(false, nil)
+	vp.On("EmbedSubtitle", mock.Anything, mkvPath, mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	var published event.DomainEvent

@@ -13,14 +13,16 @@ import (
 	"subsync/pkg/logger"
 )
 
+
 var sxxExxRegex = regexp.MustCompile(`[Ss](\d{1,2})[Ee](\d{1,2})`)
 
 type ScanningService struct {
 	subtitleRepo   port.SubtitleRepository
 	videoProcessor port.VideoProcessor
 	taskQueue      port.TaskQueue
-	watchDirs      []string           // fallback from env config
+	watchDirs      []string                // fallback from env config
 	watchDirRepo   port.WatchDirRepository // optional: overrides watchDirs when non-empty
+	settingsRepo   port.AppSettingsRepository
 }
 
 func NewScanningService(
@@ -29,6 +31,7 @@ func NewScanningService(
 	taskQueue port.TaskQueue,
 	watchDirs []string,
 	watchDirRepo port.WatchDirRepository,
+	settingsRepo port.AppSettingsRepository,
 ) *ScanningService {
 	return &ScanningService{
 		subtitleRepo:   subtitleRepo,
@@ -36,6 +39,7 @@ func NewScanningService(
 		taskQueue:      taskQueue,
 		watchDirs:      watchDirs,
 		watchDirRepo:   watchDirRepo,
+		settingsRepo:   settingsRepo,
 	}
 }
 
@@ -86,7 +90,24 @@ func inferMediaInfo(videoPath string) *valueobject.MediaInfo {
 	return &valueobject.MediaInfo{}
 }
 
+func (s *ScanningService) targetLanguage(ctx context.Context) (string, valueobject.LanguageSpec) {
+	code := "tr"
+	if s.settingsRepo != nil {
+		if v, err := s.settingsRepo.GetSetting(ctx, "target_language"); err == nil && v != "" {
+			code = v
+		}
+	}
+	lang, ok := valueobject.LookupLanguage(code)
+	if !ok {
+		lang = valueobject.DefaultLanguage()
+		code = lang.Code
+	}
+	return code, lang
+}
+
 func (s *ScanningService) Scan(ctx context.Context) error {
+	langCode, lang := s.targetLanguage(ctx)
+
 	for _, dir := range s.resolveWatchDirs(ctx) {
 		logger.Debug("scanning directory: %s", dir)
 		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -103,13 +124,13 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				return nil
 			}
 
-			hasTr, err := s.videoProcessor.HasTurkishSubtitle(ctx, path)
+			hasTarget, err := s.videoProcessor.HasTargetSubtitle(ctx, path, lang.FFmpegCode)
 			if err != nil {
 				logger.Warn("ffprobe check failed: %s — %v", filepath.Base(path), err)
 				return nil
 			}
-			if hasTr {
-				logger.Info("skip (has TR sub): %s", filepath.Base(path))
+			if hasTarget {
+				logger.Info("skip (has %s sub): %s", langCode, filepath.Base(path))
 				return nil
 			}
 
@@ -153,14 +174,15 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 			}
 
 			if err := s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
-				EngPath:   engPath,
-				VideoPath: path,
+				EngPath:        engPath,
+				VideoPath:      path,
+				TargetLanguage: langCode,
 			}); err != nil {
 				logger.Error("enqueue failed: %s — %v", filepath.Base(engPath), err)
 				return nil
 			}
 
-			logger.Info("queued translate: %s", filepath.Base(engPath))
+			logger.Info("queued translate: %s [lang=%s]", filepath.Base(engPath), langCode)
 
 			if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
 				logger.Error("subtitle save failed for %s: %v", engPath, err)

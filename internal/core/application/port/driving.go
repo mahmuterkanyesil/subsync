@@ -11,7 +11,7 @@ type ScanningUseCase interface {
 }
 
 type TranslationUseCase interface {
-	Translate(ctx context.Context, engPath string) error
+	Translate(ctx context.Context, engPath, targetLang string) error
 }
 
 type EmbeddingUseCase interface {
@@ -35,6 +35,8 @@ type StatsUseCase interface {
 	ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 	DeleteSubtitle(ctx context.Context, engPath string) error
 	RefreshKeyStatuses(ctx context.Context) error
+	GetTargetLanguage(ctx context.Context) string
+	SetTargetLanguage(ctx context.Context, code string) error
 	ListWatchDirs(ctx context.Context) ([]*entity.WatchDir, error)
 	AddWatchDir(ctx context.Context, path string) error
 	DeleteWatchDir(ctx context.Context, id int) error

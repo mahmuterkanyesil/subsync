@@ -87,7 +87,7 @@ func TestTranslationService_Translate_AlreadyDone_NoOp(t *testing.T) {
 	translator.AssertNotCalled(t, "TranslateBatch")
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, &testmocks.MockProgressStore{}, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 	require.NoError(t, err)
 }
 
@@ -113,7 +113,7 @@ func TestTranslationService_Translate_HappyPath_SingleBatch(t *testing.T) {
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(translated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
 	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
@@ -125,7 +125,7 @@ func TestTranslationService_Translate_HappyPath_SingleBatch(t *testing.T) {
 	})).Return()
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, events)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	require.NoError(t, err)
 	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
@@ -159,7 +159,7 @@ func TestTranslationService_Translate_ResumeFromProgress(t *testing.T) {
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
 	translator.On("TranslateBatch", mock.Anything, mock.MatchedBy(func(blocks []port.SRTBlock) bool {
 		return len(blocks) == 1
-	}), key.KeyValue(), mock.Anything).Return(remainingTranslated, nil)
+	}), key.KeyValue(), mock.Anything, mock.Anything).Return(remainingTranslated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
 	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
@@ -167,7 +167,7 @@ func TestTranslationService_Translate_ResumeFromProgress(t *testing.T) {
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	require.NoError(t, err)
 	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
@@ -196,7 +196,7 @@ func TestTranslationService_Translate_ValidationFails_TransitionsToError(t *test
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(englishBlocks, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
 	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
@@ -204,7 +204,7 @@ func TestTranslationService_Translate_ValidationFails_TransitionsToError(t *test
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "validation failed")
@@ -235,9 +235,9 @@ func TestTranslationService_Translate_RPD_FallsBackToNextModel(t *testing.T) {
 
 	// First call fails with RPD on gemini-3.1-flash-lite, second call succeeds (gemini-2.5-flash)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, quotaErr).Once()
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(translated, nil).Once()
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
 	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
@@ -245,7 +245,7 @@ func TestTranslationService_Translate_RPD_FallsBackToNextModel(t *testing.T) {
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	assert.NoError(t, err)
 	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
@@ -277,11 +277,11 @@ func TestTranslationService_Translate_AllModelsExhausted_WaitsForReset(t *testin
 
 	// 4 models × 1 call each = 4 RPD failures → all models exhausted → wait → ctx cancelled
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(4)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, quotaErr).Times(4)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(ctx, engPath)
+	err := svc.Translate(ctx, engPath, "tr")
 
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }
@@ -309,12 +309,12 @@ func TestTranslationService_Translate_QuotaExhaustedRPM_CtxCancel_SavesProgress(
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, rpmErr)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(ctx, engPath)
+	err := svc.Translate(ctx, engPath, "tr")
 
 	assert.Error(t, err)
 	assert.True(t, errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled))
@@ -343,7 +343,7 @@ func TestTranslationService_Translate_NoAPIKey_ReturnsError(t *testing.T) {
 	translator.AssertNotCalled(t, "TranslateBatch")
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no active api keys")
@@ -370,7 +370,7 @@ func TestTranslationService_Translate_PublishesEventOnSuccess(t *testing.T) {
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(translated, nil)
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
 	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), mock.AnythingOfType("string")).Return(nil)
@@ -386,7 +386,7 @@ func TestTranslationService_Translate_PublishesEventOnSuccess(t *testing.T) {
 	}).Return()
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, events)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	require.NoError(t, err)
 	require.NotNil(t, published)
@@ -417,12 +417,12 @@ func TestTranslationService_Translate_DefaultOtherError_SavesProgressAndReturns(
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
-	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything).
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, networkErr)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
-	err := svc.Translate(context.Background(), engPath)
+	err := svc.Translate(context.Background(), engPath, "tr")
 
 	assert.ErrorIs(t, err, networkErr)
 	progressStore.AssertCalled(t, "Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock"))

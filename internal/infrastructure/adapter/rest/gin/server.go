@@ -113,6 +113,7 @@ func (s *HTTPServer) Start(ctx context.Context) error {
 	r.POST("/keys/:id/reset-quota", s.webResetQuota)
 	r.POST("/keys/:id/model", s.webUpdateKeyModel)
 	r.GET("/settings", s.webSettings)
+	r.POST("/settings/language", s.webSetLanguage)
 	r.POST("/settings/dirs", s.webAddWatchDir)
 	r.POST("/settings/dirs/:id/toggle", s.webToggleWatchDir)
 	r.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
