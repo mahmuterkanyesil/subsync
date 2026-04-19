@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"embed"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -61,8 +62,18 @@ func migrate(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		if _, err := db.Exec(string(content)); err != nil {
-			return err
+		statements := strings.Split(string(content), ";")
+		for _, stmt := range statements {
+			stmt = strings.TrimSpace(stmt)
+			if stmt == "" {
+				continue
+			}
+			if _, err := db.Exec(stmt); err != nil {
+				if strings.Contains(err.Error(), "duplicate column name") {
+					continue
+				}
+				return err
+			}
 		}
 		if _, err := db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version); err != nil {
 			return err

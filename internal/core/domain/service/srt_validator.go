@@ -30,18 +30,6 @@ func ValidateBlockNumbers(blocks []valueobject.SRTBlock) error {
 	return nil
 }
 
-// ValidateTimingOrder checks that each block's start time is not before the previous block's end time.
-func ValidateTimingOrder(blocks []valueobject.SRTBlock) error {
-	for i := 1; i < len(blocks); i++ {
-		prev := parseEndTime(blocks[i-1].Timestamp)
-		cur := parseStartTime(blocks[i].Timestamp)
-		if cur != "" && prev != "" && cur < prev {
-			return fmt.Errorf("block %d timestamp out of order: %q starts before previous block ends at %q",
-				blocks[i].Index, blocks[i].Timestamp, prev)
-		}
-	}
-	return nil
-}
 
 // ValidateBlockFormat checks that every block has a valid timestamp and non-empty text.
 func ValidateBlockFormat(blocks []valueobject.SRTBlock) error {
@@ -68,26 +56,6 @@ func ValidateTranslation(original, translated []valueobject.SRTBlock) error {
 	if err := ValidateBlockNumbers(translated); err != nil {
 		errs = append(errs, err)
 	}
-	if err := ValidateTimingOrder(translated); err != nil {
-		errs = append(errs, err)
-	}
 	return errors.Join(errs...)
 }
 
-// parseStartTime extracts the start timestamp string from "HH:MM:SS,mmm --> HH:MM:SS,mmm".
-func parseStartTime(timestamp string) string {
-	parts := strings.SplitN(timestamp, " --> ", 2)
-	if len(parts) < 1 {
-		return ""
-	}
-	return strings.TrimSpace(parts[0])
-}
-
-// parseEndTime extracts the end timestamp string from "HH:MM:SS,mmm --> HH:MM:SS,mmm".
-func parseEndTime(timestamp string) string {
-	parts := strings.SplitN(timestamp, " --> ", 2)
-	if len(parts) < 2 {
-		return ""
-	}
-	return strings.TrimSpace(parts[1])
-}
