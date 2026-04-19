@@ -91,6 +91,21 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		return nil
 	}
 
+	// If .tr.srt already exists, translation completed in a prior run but the
+	// DB save failed (e.g. SQLITE_BUSY). Recover by updating status only.
+	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
+	if _, statErr := os.Stat(trPath); statErr == nil {
+		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr == nil {
+			if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr == nil {
+				_ = s.progress.Clear(ctx, engPath)
+				logger.Info("translate recovered: %s", filepath.Base(engPath))
+				s.publish(event.NewTranslationCompleted(engPath))
+				return nil
+			}
+		}
+		return nil
+	}
+
 	content, err := os.ReadFile(engPath)
 	if err != nil {
 		return err
@@ -140,6 +155,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
 		if err != nil {
+			subtitle.MarkError(fmt.Errorf("no active api keys for gemini"))
 			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
 			_ = s.subtitleRepo.Save(ctx, subtitle)
 			return fmt.Errorf("no active api keys configured for service gemini")
@@ -197,9 +213,11 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 
 	// SRT block structure validation
 	if err := domainservice.ValidateTranslation(blocks, translated); err != nil {
+		validationErr := fmt.Errorf("srt validation failed: %w", err)
+		subtitle.MarkError(validationErr)
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
-		return fmt.Errorf("srt validation failed: %w", err)
+		return validationErr
 	}
 
 	// Domain service ile doğrula
@@ -208,12 +226,13 @@ func (s *TranslationService) Translate(ctx context.Context, engPath string) erro
 		texts[i] = translated[i].Text
 	}
 	if !domainservice.IsTranslatedToTurkish(texts) {
+		notTurkishErr := fmt.Errorf("translation validation failed: not turkish")
+		subtitle.MarkError(notTurkishErr)
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
-		return fmt.Errorf("translation validation failed: not turkish")
+		return notTurkishErr
 	}
 
-	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + ".tr.srt"
 	if err := os.WriteFile(trPath, []byte(srt.Format(translated)), 0644); err != nil {
 		return err
 	}

@@ -29,7 +29,12 @@
         {{range .Records}}
         <tr>
           <td class="path-cell" title="{{.EngPath}}">{{base .EngPath}}</td>
-          <td><span class="badge badge-{{.Status}}">{{.Status}}</span></td>
+          <td>
+            <span class="badge badge-{{.Status}}">{{.Status}}</span>
+            {{if and (or (eq .Status "error") (eq .Status "embed_failed")) .LastError}}
+            <br><small style="color:#ef4444;font-size:0.7rem;word-break:break-word" title="{{.LastError}}">{{.LastError}}</small>
+            {{end}}
+          </td>
           <td>{{.MediaType}}</td>
           <td>{{.UpdatedAt}}</td>
           <td>

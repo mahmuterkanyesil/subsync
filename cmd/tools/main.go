@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -12,8 +11,6 @@ import (
 	"subsync/internal/infrastructure/adapter/persistence/sqlite"
 	"subsync/pkg/config"
 	"subsync/pkg/logger"
-
-	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -27,16 +24,11 @@ func main() {
 	cfg := config.Load()
 	logger.Init()
 
-	db, err := sql.Open("sqlite", cfg.StateDBPath)
+	db, err := sqlite.Open(cfg.StateDBPath)
 	if err != nil {
-		logger.Error("%v", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	if err := sqlite.Migrate(db); err != nil {
 		log.Fatal(err)
 	}
+	defer db.Close()
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	ctx := context.Background()

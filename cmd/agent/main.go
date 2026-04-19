@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"os"
 	"os/signal"
@@ -15,8 +14,6 @@ import (
 	"subsync/internal/infrastructure/adapter/video/ffmpeg"
 	"subsync/pkg/config"
 	"subsync/pkg/logger"
-
-	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -24,15 +21,11 @@ func main() {
 	// init logger early
 	logger.Init()
 
-	db, err := sql.Open("sqlite", cfg.StateDBPath)
+	db, err := sqlite.Open(cfg.StateDBPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
-
-	if err := sqlite.Migrate(db); err != nil {
-		log.Fatal(err)
-	}
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	watchDirRepo := sqlite.NewSQLiteWatchDirRepository(db)
