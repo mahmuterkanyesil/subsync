@@ -104,6 +104,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	basePath := strings.TrimSuffix(engPath, ".eng.srt")
 	basePath = strings.TrimSuffix(basePath, ".srt")
 	trPath := basePath + "." + lang.Code + ".srt"
+	oldTrPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + lang.Code + ".srt"
+
+	if stat, err := os.Stat(trPath); err == nil && stat.Size() > 0 {
+		// Found new format
+	} else if stat, err := os.Stat(oldTrPath); err == nil && stat.Size() > 0 {
+		// Found old format, use it for recovery
+		trPath = oldTrPath
+	}
+
 	if _, statErr := os.Stat(trPath); statErr == nil {
 		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr == nil {
 			if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr == nil {
