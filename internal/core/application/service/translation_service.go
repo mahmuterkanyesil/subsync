@@ -101,7 +101,9 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 
 	// If translated srt already exists, translation completed in a prior run but the
 	// DB save failed (e.g. SQLITE_BUSY). Recover by updating status only.
-	trPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + lang.Code + ".srt"
+	basePath := strings.TrimSuffix(engPath, ".eng.srt")
+	basePath = strings.TrimSuffix(basePath, ".srt")
+	trPath := basePath + "." + lang.Code + ".srt"
 	if _, statErr := os.Stat(trPath); statErr == nil {
 		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr == nil {
 			if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr == nil {

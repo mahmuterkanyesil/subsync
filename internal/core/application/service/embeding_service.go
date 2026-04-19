@@ -129,7 +129,17 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 	}
 
 	engPath := subtitle.EngPath()
-	trPath := engPath[:len(engPath)-len(".eng.srt")] + "." + lang.Code + ".srt"
+	basePath := strings.TrimSuffix(engPath, ".eng.srt")
+	basePath = strings.TrimSuffix(basePath, ".srt")
+	trPath := basePath + "." + lang.Code + ".srt"
+
+	// Backward compatibility for files generated before the path fix (.eng.tr.srt)
+	if _, err := os.Stat(trPath); errors.Is(err, os.ErrNotExist) {
+		oldTrPath := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + lang.Code + ".srt"
+		if _, err := os.Stat(oldTrPath); err == nil {
+			trPath = oldTrPath
+		}
+	}
 
 	if anomalyErr := s.checkSubtitleAnomaly(engPath, trPath); anomalyErr != nil {
 		logger.Warn("embed: anomaly check failed for %s — %v", name, anomalyErr)

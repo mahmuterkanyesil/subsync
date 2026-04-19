@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,7 +132,9 @@ func TestTranslationService_Translate_HappyPath_SingleBatch(t *testing.T) {
 	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
 
 	// .tr.srt must be written
-	trPath := engPath[:len(engPath)-len(".srt")] + ".tr.srt"
+	basePath := strings.TrimSuffix(engPath, ".eng.srt")
+	basePath = strings.TrimSuffix(basePath, ".srt")
+	trPath := basePath + ".tr.srt"
 	_, statErr := os.Stat(trPath)
 	assert.NoError(t, statErr, ".tr.srt file should be created")
 }
