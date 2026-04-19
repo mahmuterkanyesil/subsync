@@ -38,17 +38,33 @@ func Open(dbPath string) (*sql.DB, error) {
 }
 
 func migrate(db *sql.DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)`); err != nil {
+		return err
+	}
+
 	files, err := migrations.ReadDir("migrations")
 	if err != nil {
 		return err
 	}
 
-	for _, f := range files {
+	for i, f := range files {
+		version := i + 1
+		var count int
+		if err := db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version).Scan(&count); err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+
 		content, err := migrations.ReadFile("migrations/" + f.Name())
 		if err != nil {
 			return err
 		}
 		if _, err := db.Exec(string(content)); err != nil {
+			return err
+		}
+		if _, err := db.Exec("INSERT INTO schema_migrations (version) VALUES (?)", version); err != nil {
 			return err
 		}
 	}
