@@ -62,7 +62,7 @@ services:
     environment:
       - STATE_DB_PATH=/data/state.db
       - PROGRESS_DIR=/data/progress
-      - EMBED_INTERVAL_SEC=600
+      - EMBED_INTERVAL_SEC=120
       - LOG_FORWARD_URL=http://api:8080/api/internal/logs
       - LOG_LEVEL=info
     volumes:
