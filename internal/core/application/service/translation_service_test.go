@@ -275,15 +275,18 @@ func TestTranslationService_Translate_AllModelsExhausted_WaitsForReset(t *testin
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 
-	// 4 models × 1 call each = 4 RPD failures → all models exhausted → wait → ctx cancelled
+	// 4 models × 1 call each = 4 RPD failures → all models exhausted
 	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(4)
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, quotaErr).Times(4)
+	subRepo.On("Save", mock.Anything, subtitle).Return(nil).Once()
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
 	err := svc.Translate(ctx, engPath, "tr")
 
-	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "all models exhausted")
+	assert.Equal(t, valueobject.StatusQuotaExhausted, subtitle.Status())
 }
 
 func TestTranslationService_Translate_QuotaExhaustedRPM_CtxCancel_SavesProgress(t *testing.T) {

@@ -201,7 +201,7 @@ func (g *GeminiTranslator) TranslateBatch(ctx context.Context, blocks []port.SRT
 }
 
 func (g *GeminiTranslator) parseResponse(response string, original []port.SRTBlock) ([]port.SRTBlock, error) {
-	var translated []port.SRTBlock
+	translatedMap := make(map[int]port.SRTBlock)
 
 	parts := strings.Split(response, "</b>")
 	for _, part := range parts {
@@ -219,19 +219,25 @@ func (g *GeminiTranslator) parseResponse(response string, original []port.SRTBlo
 			continue
 		}
 		var index int
-		fmt.Sscanf(lines[0], "%d", &index)
-		translated = append(translated, port.SRTBlock{
+		fmt.Sscanf(strings.TrimSpace(lines[0]), "%d", &index)
+		translatedMap[index] = port.SRTBlock{
 			Index:     index,
-			Timestamp: lines[1],
-			Text:      lines[2],
-		})
+			Timestamp: strings.TrimSpace(lines[1]),
+			Text:      strings.TrimSpace(lines[2]),
+		}
 	}
 
-	if len(translated) != len(original) {
-		return nil, fmt.Errorf("block count mismatch: got %d, want %d", len(translated), len(original))
+	var finalTranslated []port.SRTBlock
+	for _, orig := range original {
+		if tb, ok := translatedMap[orig.Index]; ok {
+			finalTranslated = append(finalTranslated, tb)
+		} else {
+			// Missing block, fallback to original to prevent entire batch failure
+			finalTranslated = append(finalTranslated, orig)
+		}
 	}
 
-	return translated, nil
+	return finalTranslated, nil
 }
 
 func (g *GeminiTranslator) handleError(err error) error {

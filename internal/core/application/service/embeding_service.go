@@ -136,7 +136,7 @@ func (s *EmbeddingService) embedOne(ctx context.Context, subtitle *entity.Subtit
 		if errors.Is(anomalyErr, os.ErrNotExist) {
 			_ = subtitle.TransitionTo(valueobject.StatusQueued)
 		} else {
-			_ = os.Remove(trPath)
+			_ = os.Rename(trPath, trPath+".error")
 			_ = subtitle.TransitionTo(valueobject.StatusError)
 			subtitle.MarkError(fmt.Errorf("anomaly: %w", anomalyErr))
 		}

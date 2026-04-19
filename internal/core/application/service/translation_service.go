@@ -132,6 +132,10 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		logger.Info("translate resume: %s — %d/%d blocks done", name, len(translated), len(blocks))
 	}
 
+	if len(translated) > len(blocks) {
+		logger.Warn("translate: translated blocks (%d) > original blocks (%d) for %s — truncating", len(translated), len(blocks), name)
+		translated = translated[:len(blocks)]
+	}
 	remaining := blocks[len(translated):]
 	totalBatches := (len(remaining) + s.batchSize - 1) / s.batchSize
 	batchNum := 0
@@ -148,17 +152,11 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		currentModel := s.pickModel()
 		if currentModel == "" {
 			resetAt := s.earliestModelReset()
-			wait := time.Until(resetAt) + 30*time.Second
-			if wait < 0 {
-				wait = 30 * time.Second
-			}
-			logger.Warn("translate: all models exhausted for %s — waiting %s", name, wait.Round(time.Second))
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(wait):
-			}
-			continue
+			logger.Warn("translate: all models exhausted for %s — next reset at %s", name, resetAt.Format(time.RFC3339))
+			subtitle.MarkError(fmt.Errorf("all models exhausted, wait until %s", resetAt.Format(time.RFC3339)))
+			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
+			_ = s.subtitleRepo.Save(ctx, subtitle)
+			return fmt.Errorf("all models exhausted")
 		}
 
 		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
@@ -190,7 +188,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 				strings.Contains(errStr, "quota_exhausted"):
 				logger.Warn("translate: RPD quota hit for %s [model=%s] — switching model", name, currentModel)
 				s.exhaustedModels[currentModel] = time.Now().Add(24 * time.Hour)
-				_ = os.Remove(trPath)
 				batchNum--
 				continue
 
