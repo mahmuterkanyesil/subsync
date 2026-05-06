@@ -49,14 +49,6 @@ func (m *MockSubtitleRepository) Statistics(ctx context.Context) (*port.Subtitle
 	return args.Get(0).(*port.SubtitleStats), args.Error(1)
 }
 
-func (m *MockSubtitleRepository) FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error) {
-	args := m.Called(ctx, season, episode)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*entity.Subtitle), args.Error(1)
-}
-
 func (m *MockSubtitleRepository) FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
 	args := m.Called(ctx, status)
 	if args.Get(0) == nil {

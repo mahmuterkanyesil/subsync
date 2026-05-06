@@ -23,8 +23,7 @@ type SubtitleRepository interface {
 	FindAll(ctx context.Context) ([]*entity.Subtitle, error)
 	FindPendingEmbed(ctx context.Context) ([]*entity.Subtitle, error)
 	Statistics(ctx context.Context) (*SubtitleStats, error)
-	FindBySxxExx(ctx context.Context, season, episode int) ([]*entity.Subtitle, error)
-	FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
+FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 	Delete(ctx context.Context, engPath string) error
 }
 

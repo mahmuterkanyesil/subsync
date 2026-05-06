@@ -176,7 +176,7 @@ func TestScanningService_Scan_SkipsExistingDoneSubtitle(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestScanningService_Scan_SkipsRelocatedViaSxxExx(t *testing.T) {
+func TestScanningService_Scan_RequeuesRelocatedVideo(t *testing.T) {
 	dir := t.TempDir()
 	videoPath := makeTempFile(t, dir, "S03E07.mkv")
 	engPath := filepath.Join(dir, "S03E07.eng.srt")
@@ -186,21 +186,25 @@ func TestScanningService_Scan_SkipsRelocatedViaSxxExx(t *testing.T) {
 	queue := &testmocks.MockTaskQueue{}
 	defer subRepo.AssertExpectations(t)
 	defer vp.AssertExpectations(t)
+	defer queue.AssertExpectations(t)
 
-	// Exact path not found, but SxxExx match found
+	// Exact path not found in DB (video was relocated), no SxxExx match either
 	notFoundErr := errors.New("not found")
-	oldSubtitle := makeSubtitleAt(t, "/old/path/S03E07.eng.srt", valueobject.StatusDone)
 
 	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(nil, notFoundErr)
-	subRepo.On("FindBySxxExx", mock.Anything, 3, 7).Return([]*entity.Subtitle{oldSubtitle}, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
-	queue.AssertNotCalled(t, "Enqueue")
+	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
+		return task.EngPath == engPath && task.VideoPath == videoPath
+	})).Return(nil)
+	subRepo.On("Save", mock.Anything, mock.AnythingOfType("*entity.Subtitle")).Return(nil)
 
 	svc := newScanSvc(subRepo, vp, queue, []string{dir}, nil)
 	err := svc.Scan(context.Background())
 	require.NoError(t, err)
+
+	queue.AssertCalled(t, "Enqueue", mock.Anything, "translate_srt", mock.AnythingOfType("port.TranslateTask"))
 }
 
 func TestScanningService_Scan_EnqueueAndSavesNewSubtitle(t *testing.T) {
@@ -220,7 +224,6 @@ func TestScanningService_Scan_EnqueueAndSavesNewSubtitle(t *testing.T) {
 	vp.On("HasTargetSubtitle", mock.Anything, videoPath, "tur").Return(false, nil)
 	vp.On("EnsureEngSubtitle", mock.Anything, videoPath).Return(engPath, nil)
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(nil, notFoundErr)
-	subRepo.On("FindBySxxExx", mock.Anything, 1, 1).Return([]*entity.Subtitle{}, nil)
 	subRepo.On("FindAll", mock.Anything).Return([]*entity.Subtitle{}, nil)
 	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
 		return task.EngPath == engPath && task.VideoPath == videoPath && task.TargetLanguage == "tr"
