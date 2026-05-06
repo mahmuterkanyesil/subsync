@@ -155,12 +155,22 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 			}
 
 			// SxxExx ile fuzzy match — video relocated mi?
+			// Only skip if a candidate is in an active/terminal state; error/embed_failed
+			// candidates must NOT block re-processing of the new path.
 			if err != nil || existing == nil {
 				if season, episode, ok := extractSxxExx(path); ok {
 					candidates, dbErr := s.subtitleRepo.FindBySxxExx(ctx, season, episode)
-					if dbErr == nil && len(candidates) > 0 {
-						logger.Info("video relocated S%02dE%02d: %s", season, episode, filepath.Base(path))
-						return nil
+					if dbErr == nil {
+						for _, c := range candidates {
+							switch c.Status() {
+							case valueobject.StatusQueued,
+								valueobject.StatusDone,
+								valueobject.StatusEmbedded,
+								valueobject.StatusQuotaExhausted:
+								logger.Info("video relocated S%02dE%02d: %s", season, episode, filepath.Base(path))
+								return nil
+							}
+						}
 					}
 				}
 			}
