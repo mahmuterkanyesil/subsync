@@ -229,6 +229,12 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	// SRT block structure validation
 	if err := domainservice.ValidateTranslation(blocks, translated); err != nil {
 		validationErr := fmt.Errorf("srt validation failed: %w", err)
+		// Progress is corrupt or stale — clear it so the next retry translates
+		// from scratch instead of re-loading the same invalid blocks forever.
+		if len(remaining) == 0 {
+			_ = s.progress.Clear(ctx, engPath)
+			logger.Warn("translate: validation failed with full progress, clearing cache: %s — %v", name, err)
+		}
 		subtitle.MarkError(validationErr)
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
@@ -241,6 +247,10 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	}
 	if !domainservice.IsTranslatedToLanguage(texts, targetLang) {
 		notLangErr := fmt.Errorf("translation validation failed: not %s", lang.NameEN)
+		if len(remaining) == 0 {
+			_ = s.progress.Clear(ctx, engPath)
+			logger.Warn("translate: language check failed with full progress, clearing cache: %s", name)
+		}
 		subtitle.MarkError(notLangErr)
 		_ = subtitle.TransitionTo(valueobject.StatusError)
 		_ = s.subtitleRepo.Save(ctx, subtitle)
