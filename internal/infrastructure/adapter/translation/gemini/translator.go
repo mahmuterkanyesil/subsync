@@ -229,10 +229,10 @@ func (g *GeminiTranslator) parseResponse(response string, original []port.SRTBlo
 
 	var finalTranslated []port.SRTBlock
 	for _, orig := range original {
-		if tb, ok := translatedMap[orig.Index]; ok {
+		if tb, ok := translatedMap[orig.Index]; ok && strings.TrimSpace(tb.Text) != "" {
 			finalTranslated = append(finalTranslated, tb)
 		} else {
-			// Missing block, fallback to original to prevent entire batch failure
+			// Missing or empty translation — fallback to original to keep block count intact
 			finalTranslated = append(finalTranslated, orig)
 		}
 	}
