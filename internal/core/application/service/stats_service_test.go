@@ -370,6 +370,112 @@ func TestStatsService_ListRecordsByStatus_DelegatesToRepo(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
+// --- SearchRecords ---
+
+func TestStatsService_SearchRecords_DelegatesToRepo(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	defer subRepo.AssertExpectations(t)
+
+	f := port.SubtitleFilter{Query: "breaking", SortBy: "created_at", Order: "DESC", Limit: 20}
+	want := &port.SubtitlePage{Items: []*entity.Subtitle{makeSubtitle(t, valueobject.StatusDone, false)}, Total: 1}
+	subRepo.On("FindWithFilters", mock.Anything, f).Return(want, nil)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
+	got, err := svc.SearchRecords(context.Background(), f)
+
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestStatsService_SearchRecords_RepoError_Propagated(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	defer subRepo.AssertExpectations(t)
+
+	repoErr := errors.New("db error")
+	f := port.SubtitleFilter{Limit: 50}
+	subRepo.On("FindWithFilters", mock.Anything, f).Return((*port.SubtitlePage)(nil), repoErr)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
+	_, err := svc.SearchRecords(context.Background(), f)
+
+	assert.ErrorIs(t, err, repoErr)
+}
+
+// --- BulkReTranslate ---
+
+func TestStatsService_BulkReTranslate_EnqueuesAll(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	queue := &testmocks.MockTaskQueue{}
+	defer subRepo.AssertExpectations(t)
+	defer queue.AssertExpectations(t)
+
+	s1 := makeSubtitleWithPath(t, "/media/movie1.eng.srt", valueobject.StatusDone)
+	s2 := makeSubtitleWithPath(t, "/media/movie2.eng.srt", valueobject.StatusError)
+	paths := []string{s1.EngPath(), s2.EngPath()}
+
+	subRepo.On("FindByPath", mock.Anything, s1.EngPath()).Return(s1, nil)
+	subRepo.On("Save", mock.Anything, s1).Return(nil)
+	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
+		return task.EngPath == s1.EngPath()
+	})).Return(nil)
+
+	subRepo.On("FindByPath", mock.Anything, s2.EngPath()).Return(s2, nil)
+	subRepo.On("Save", mock.Anything, s2).Return(nil)
+	queue.On("Enqueue", mock.Anything, "translate_srt", mock.MatchedBy(func(task port.TranslateTask) bool {
+		return task.EngPath == s2.EngPath()
+	})).Return(nil)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, queue)
+	err := svc.BulkReTranslate(context.Background(), paths)
+
+	require.NoError(t, err)
+}
+
+func TestStatsService_BulkReTranslate_SkipsInvalidTransitions(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	queue := &testmocks.MockTaskQueue{}
+	defer subRepo.AssertExpectations(t)
+	defer queue.AssertExpectations(t)
+
+	// StatusQueued → StatusQueued is invalid; should be skipped without returning error
+	queued := makeSubtitle(t, valueobject.StatusQueued, false)
+	subRepo.On("FindByPath", mock.Anything, queued.EngPath()).Return(queued, nil)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, queue)
+	err := svc.BulkReTranslate(context.Background(), []string{queued.EngPath()})
+
+	require.NoError(t, err)
+}
+
+// --- BulkDelete ---
+
+func TestStatsService_BulkDelete_DelegatesToRepo(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	defer subRepo.AssertExpectations(t)
+
+	paths := []string{"/a/b.srt", "/c/d.srt"}
+	subRepo.On("DeleteMany", mock.Anything, paths).Return(nil)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
+	err := svc.BulkDelete(context.Background(), paths)
+
+	require.NoError(t, err)
+}
+
+func TestStatsService_BulkDelete_RepoError_Propagated(t *testing.T) {
+	subRepo := &testmocks.MockSubtitleRepository{}
+	defer subRepo.AssertExpectations(t)
+
+	repoErr := errors.New("constraint violation")
+	paths := []string{"/a/b.srt"}
+	subRepo.On("DeleteMany", mock.Anything, paths).Return(repoErr)
+
+	svc := newStatsService(subRepo, &testmocks.MockAPIKeyRepository{}, &testmocks.MockWatchDirRepository{}, &testmocks.MockTaskQueue{})
+	err := svc.BulkDelete(context.Background(), paths)
+
+	assert.ErrorIs(t, err, repoErr)
+}
+
 func TestStatsService_GetStats_RepoError_Propagated(t *testing.T) {
 	subRepo := &testmocks.MockSubtitleRepository{}
 	defer subRepo.AssertExpectations(t)

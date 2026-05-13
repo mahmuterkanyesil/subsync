@@ -26,14 +26,16 @@ func main() {
 	defer db.Close()
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
-	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
+	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepositoryWithEncryption(db, cfg.EncryptionSecret)
 	watchDirRepo := sqlite.NewSQLiteWatchDirRepository(db)
 	settingsRepo := sqlite.NewSQLiteAppSettingsRepository(db)
 	taskQueue := asynq.NewAsynqTaskQueue(cfg.RedisURL)
 
 	statsService := service.NewStatsService(subtitleRepo, apiKeyRepo, watchDirRepo, taskQueue, settingsRepo)
 
-	server := gin.NewHTTPServer(statsService, cfg.APIPort, cfg.DashboardUsername, cfg.DashboardPassword, cfg.InternalLogToken)
+	server := gin.NewHTTPServer(statsService, cfg.APIPort, cfg.DashboardUsername, cfg.DashboardPassword, cfg.InternalLogToken).
+		WithDB(db).
+		WithRedis(cfg.RedisURL)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

@@ -25,7 +25,7 @@ func main() {
 	defer db.Close()
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
-	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
+	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepositoryWithEncryption(db, cfg.EncryptionSecret)
 	settingsRepo := sqlite.NewSQLiteAppSettingsRepository(db)
 
 	translator := gemini.NewGeminiTranslator()

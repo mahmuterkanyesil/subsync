@@ -1,5 +1,10 @@
 {{define "title"}}Settings — Subsync{{end}}
 {{define "content"}}
+<style>
+.model-item { transition: background .15s; }
+.model-item.drag-over { background: #dbeafe !important; border-color: #1d4ed8 !important; }
+.model-item[draggable=true]:active { opacity: .5; }
+</style>
 <h1>Settings</h1>
 
 {{if .Flash}}
@@ -20,6 +25,25 @@
       {{end}}
     </select>
     <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Model Priority</h2>
+  <p style="margin:.5rem 0 1.25rem;color:#6b7280;font-size:.9rem;">
+    Translation worker tries models in this order. Drag to reorder, then save.
+  </p>
+  <form method="POST" action="/settings/model-priority" id="modelPriorityForm">
+    <ol id="modelList" style="list-style:none;padding:0;margin-bottom:1rem">
+      {{range .ModelPriority}}
+      <li class="model-item" style="display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:.5rem;cursor:grab">
+        <span style="color:#9ca3af;user-select:none">☰</span>
+        <span style="flex:1;font-family:monospace;font-size:.875rem">{{.}}</span>
+        <input type="hidden" name="model[]" value="{{.}}">
+      </li>
+      {{end}}
+    </ol>
+    <button type="submit" class="btn btn-primary btn-sm">Save Priority</button>
   </form>
 </div>
 
@@ -81,4 +105,30 @@
   </p>
   {{end}}
 </div>
+
+<script>
+(function() {
+  const list = document.getElementById('modelList');
+  if (!list) return;
+  let dragging = null;
+  list.querySelectorAll('.model-item').forEach(item => {
+    item.setAttribute('draggable', 'true');
+    item.addEventListener('dragstart', () => { dragging = item; item.style.opacity = '.4'; });
+    item.addEventListener('dragend',   () => { dragging = null; item.style.opacity = ''; list.querySelectorAll('.model-item').forEach(i => i.classList.remove('drag-over')); });
+    item.addEventListener('dragover',  e => { e.preventDefault(); item.classList.add('drag-over'); });
+    item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      item.classList.remove('drag-over');
+      if (dragging && dragging !== item) {
+        const items = [...list.querySelectorAll('.model-item')];
+        const fromIdx = items.indexOf(dragging);
+        const toIdx   = items.indexOf(item);
+        if (fromIdx < toIdx) item.after(dragging);
+        else item.before(dragging);
+      }
+    });
+  });
+})();
+</script>
 {{end}}

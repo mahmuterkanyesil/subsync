@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"subsync/internal/core/application/port"
 	valueobject "subsync/internal/core/domain/valueobject"
 
 	"github.com/gin-gonic/gin"
@@ -66,6 +68,20 @@ func (s *HTTPServer) reTranslate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "queued"})
 }
 
+func (s *HTTPServer) getTranslationPreview(c *gin.Context) {
+	engPath, err := sanitizePath(c.Query("eng_path"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		return
+	}
+	content, err := s.statsUseCase.GetTranslationPreview(c.Request.Context(), engPath)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"content": content})
+}
+
 func (s *HTTPServer) reEmbed(c *gin.Context) {
 	engPath, err := sanitizePath(c.Param("engPath"))
 	if err != nil {
@@ -96,36 +112,99 @@ func (s *HTTPServer) webDashboard(c *gin.Context) {
 }
 
 func (s *HTTPServer) webRecords(c *gin.Context) {
-	filter := c.Query("status")
+	const defaultLimit = 50
 
-	var records []SubtitleResponse
-	if filter == "" {
-		all, err := s.statsUseCase.ListRecords(c.Request.Context())
-		if err != nil {
-			c.String(http.StatusInternalServerError, "error: %v", err)
-			return
-		}
-		records = toSubtitleResponses(all)
-	} else {
-		filtered, err := s.statsUseCase.ListRecordsByStatus(c.Request.Context(), valueobject.SubtitleStatus(filter))
-		if err != nil {
-			c.String(http.StatusInternalServerError, "error: %v", err)
-			return
-		}
-		records = toSubtitleResponses(filtered)
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(defaultLimit)))
+	if limit <= 0 || limit > 200 {
+		limit = defaultLimit
+	}
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if offset < 0 {
+		offset = 0
 	}
 
+	f := port.SubtitleFilter{
+		Query:  c.Query("q"),
+		Status: valueobject.SubtitleStatus(c.Query("status")),
+		SortBy: c.DefaultQuery("sort", "created_at"),
+		Order:  c.DefaultQuery("order", "DESC"),
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	page, err := s.statsUseCase.SearchRecords(c.Request.Context(), f)
+	if err != nil {
+		c.String(http.StatusInternalServerError, "error: %v", err)
+		return
+	}
+
+	totalPages := (page.Total + limit - 1) / limit
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	flash := c.Query("flash")
 	data := RecordsData{
 		CurrentPage: "records",
-		Records:     records,
-		Filter:      filter,
-		Total:       len(records),
+		Records:     toSubtitleResponses(page.Items),
+		Filter:      string(f.Status),
+		Total:       page.Total,
+		Query:       f.Query,
+		SortBy:      f.SortBy,
+		Order:       f.Order,
+		Limit:       limit,
+		Offset:      offset,
+		TotalPages:  totalPages,
+		HasPrev:     offset > 0,
+		HasNext:     offset+limit < page.Total,
+		PrevOffset:  max(0, offset-limit),
+		NextOffset:  offset + limit,
+		Flash:       c.Query("msg"),
+		FlashOK:     flash == "success",
 	}
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.records.ExecuteTemplate(c.Writer, "layout", data); err != nil {
 		_ = err
 	}
+}
+
+func (s *HTTPServer) webBulkRetry(c *gin.Context) {
+	paths := c.PostFormArray("eng_path[]")
+	var clean []string
+	for _, p := range paths {
+		if sp, err := sanitizePath(p); err == nil {
+			clean = append(clean, sp)
+		}
+	}
+	if len(clean) == 0 {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg=no+valid+paths")
+		return
+	}
+	if err := s.statsUseCase.BulkReTranslate(c.Request.Context(), clean); err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/records?flash=success")
+}
+
+func (s *HTTPServer) webBulkDelete(c *gin.Context) {
+	paths := c.PostFormArray("eng_path[]")
+	var clean []string
+	for _, p := range paths {
+		if sp, err := sanitizePath(p); err == nil {
+			clean = append(clean, sp)
+		}
+	}
+	if len(clean) == 0 {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg=no+valid+paths")
+		return
+	}
+	if err := s.statsUseCase.BulkDelete(c.Request.Context(), clean); err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/records?flash=success")
 }
 
 func (s *HTTPServer) webRetry(c *gin.Context) {

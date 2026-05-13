@@ -2,6 +2,10 @@
 {{define "content"}}
 <h1>Records</h1>
 
+{{if .Flash}}
+<div class="flash {{if .FlashOK}}flash-ok{{else}}flash-err{{end}}">{{if .FlashOK}}Done.{{else}}{{.Flash}}{{end}}</div>
+{{end}}
+
 <div class="filter-bar">
   <a href="/records" {{if eq .Filter ""}}class="active"{{end}}>All</a>
   <a href="/records?status=queued"          {{if eq .Filter "queued"}}class="active"{{end}}>Queued</a>
@@ -13,55 +17,186 @@
 </div>
 
 <div class="card">
-  <div class="record-count">{{.Total}} record{{if ne .Total 1}}s{{end}}</div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Title</th>
-          <th>Status</th>
-          <th>Media Type</th>
-          <th>Updated</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Records}}
-        <tr>
-          <td class="path-cell" title="{{.EngPath}}">{{base .EngPath}}</td>
-          <td>
-            <span class="badge badge-{{.Status}}">{{.Status}}</span>
-            {{if and (or (eq .Status "error") (eq .Status "embed_failed")) .LastError}}
-            <br><small style="color:#ef4444;font-size:0.7rem;word-break:break-word" title="{{.LastError}}">{{.LastError}}</small>
-            {{end}}
-          </td>
-          <td>{{.MediaType}}</td>
-          <td>{{.UpdatedAt}}</td>
-          <td>
-            {{if or (eq .Status "error") (eq .Status "quota_exhausted")}}
-            <form method="POST" action="/records/retry" style="display:inline">
-              <input type="hidden" name="eng_path" value="{{.EngPath}}">
-              <button type="submit" class="btn btn-warning btn-sm">Retry</button>
-            </form>
-            {{end}}
-            {{if or (eq .Status "embedded") (eq .Status "embed_failed") (eq .Status "done")}}
-            <form method="POST" action="/records/re-embed" style="display:inline">
-              <input type="hidden" name="eng_path" value="{{.EngPath}}">
-              <button type="submit" class="btn btn-primary btn-sm">Re-embed</button>
-            </form>
-            {{end}}
-            <form method="POST" action="/records/delete" style="display:inline"
-                  onsubmit="return confirm('Delete this record?')">
-              <input type="hidden" name="eng_path" value="{{.EngPath}}">
-              <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-            </form>
-          </td>
-        </tr>
-        {{else}}
-        <tr><td colspan="5" style="text-align:center;color:#6b7280;padding:2rem;">No records found.</td></tr>
-        {{end}}
-      </tbody>
-    </table>
+  {{/* Search + sort bar */}}
+  <form method="GET" action="/records" class="search-bar" id="searchForm">
+    {{if .Filter}}<input type="hidden" name="status" value="{{.Filter}}">{{end}}
+    <input type="hidden" name="sort"  id="sortInput"  value="{{.SortBy}}">
+    <input type="hidden" name="order" id="orderInput" value="{{.Order}}">
+    <input type="hidden" name="limit" value="{{.Limit}}">
+    <input type="text" name="q" value="{{.Query}}" placeholder="Search path or series…" class="search-input">
+    <button type="submit" class="btn btn-primary btn-sm">Search</button>
+    {{if .Query}}<a href="/records{{if .Filter}}?status={{.Filter}}{{end}}" class="btn btn-secondary btn-sm">Clear</a>{{end}}
+  </form>
+
+  <div class="record-count">{{.Total}} record{{if ne .Total 1}}s{{end}}{{if .Query}} matching "{{.Query}}"{{end}}</div>
+
+  {{/* Bulk action form wraps the table */}}
+  <form method="POST" id="bulkForm">
+    <div class="bulk-bar" id="bulkBar" style="display:none">
+      <span id="selectedCount">0</span> selected &nbsp;
+      <button type="submit" formaction="/records/bulk-retry" class="btn btn-warning btn-sm"
+              onclick="return confirm('Re-translate selected?')">Retry selected</button>
+      <button type="submit" formaction="/records/bulk-delete" class="btn btn-danger btn-sm"
+              onclick="return confirm('Delete selected records?')">Delete selected</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:2rem"><input type="checkbox" id="checkAll" title="Select all"></th>
+            <th>{{sortHeader "eng_path"  "Title"   $.SortBy $.Order $.Filter $.Query $.Limit $.Offset}}</th>
+            <th>{{sortHeader "status"    "Status"  $.SortBy $.Order $.Filter $.Query $.Limit $.Offset}}</th>
+            <th>Media</th>
+            <th>{{sortHeader "updated_at" "Updated" $.SortBy $.Order $.Filter $.Query $.Limit $.Offset}}</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Records}}
+          <tr>
+            <td><input type="checkbox" class="row-check" name="eng_path[]" value="{{.EngPath}}"></td>
+            <td class="path-cell" title="{{.EngPath}}">{{base .EngPath}}</td>
+            <td>
+              <span class="badge badge-{{.Status}}">{{.Status}}</span>
+              {{if gt .RetryCount 0}}<span class="badge" style="background:#f3f4f6;color:#6b7280;margin-left:.3rem" title="Retry count">↺{{.RetryCount}}</span>{{end}}
+              {{if and (or (eq .Status "error") (eq .Status "embed_failed")) .LastError}}
+              <br><small style="color:#ef4444;font-size:0.7rem;word-break:break-word" title="{{.LastError}}">{{truncate .LastError 80}}</small>
+              {{end}}
+            </td>
+            <td>{{.MediaType}}</td>
+            <td><span class="reltime" data-ts="{{.UpdatedAt}}">{{.UpdatedAt}}</span></td>
+            <td>
+              {{if or (eq .Status "done") (eq .Status "embedded")}}
+              <button type="button" class="btn btn-secondary btn-sm" onclick="showPreview('{{.EngPath}}')">Preview</button>
+              {{end}}
+              {{if or (eq .Status "error") (eq .Status "quota_exhausted")}}
+              <form method="POST" action="/records/retry" style="display:inline">
+                <input type="hidden" name="eng_path" value="{{.EngPath}}">
+                <button type="submit" class="btn btn-warning btn-sm">Retry</button>
+              </form>
+              {{end}}
+              {{if or (eq .Status "embedded") (eq .Status "embed_failed") (eq .Status "done")}}
+              <form method="POST" action="/records/re-embed" style="display:inline">
+                <input type="hidden" name="eng_path" value="{{.EngPath}}">
+                <button type="submit" class="btn btn-primary btn-sm">Re-embed</button>
+              </form>
+              {{end}}
+              <form method="POST" action="/records/delete" style="display:inline"
+                    onsubmit="return confirm('Delete this record?')">
+                <input type="hidden" name="eng_path" value="{{.EngPath}}">
+                <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {{else}}
+          <tr><td colspan="6" style="text-align:center;color:#6b7280;padding:2rem;">No records found.</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  {{/* Pagination */}}
+  {{if gt .TotalPages 1}}
+  <div class="pagination">
+    {{if .HasPrev}}
+    <a href="/records?{{buildQuery .Filter .Query .SortBy .Order .Limit .PrevOffset}}" class="btn btn-secondary btn-sm">&laquo; Prev</a>
+    {{else}}
+    <span class="btn btn-secondary btn-sm disabled">&laquo; Prev</span>
+    {{end}}
+    <span class="page-info">{{currentPage .Offset .Limit}} / {{.TotalPages}}</span>
+    {{if .HasNext}}
+    <a href="/records?{{buildQuery .Filter .Query .SortBy .Order .Limit .NextOffset}}" class="btn btn-secondary btn-sm">Next &raquo;</a>
+    {{else}}
+    <span class="btn btn-secondary btn-sm disabled">Next &raquo;</span>
+    {{end}}
+  </div>
+  {{end}}
+</div>
+
+{{/* Preview modal */}}
+<div id="previewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:8px;padding:1.5rem;max-width:680px;width:90%;max-height:80vh;display:flex;flex-direction:column;gap:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h2 style="margin:0;font-size:1rem">Translation Preview</h2>
+      <button onclick="closePreview()" style="background:none;border:none;font-size:1.25rem;cursor:pointer;color:#6b7280">✕</button>
+    </div>
+    <pre id="previewContent" style="overflow-y:auto;flex:1;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;padding:1rem;font-size:.8rem;white-space:pre-wrap;word-break:break-word;max-height:55vh">Loading…</pre>
   </div>
 </div>
+
+<script>
+function showPreview(engPath) {
+  const modal = document.getElementById('previewModal');
+  const pre   = document.getElementById('previewContent');
+  modal.style.display = 'flex';
+  pre.textContent = 'Loading…';
+  fetch('/api/records/preview?eng_path=' + encodeURIComponent(engPath))
+    .then(r => r.json())
+    .then(d => { pre.textContent = d.content || d.error || 'No content'; })
+    .catch(() => { pre.textContent = 'Failed to load preview.'; });
+}
+function closePreview() {
+  document.getElementById('previewModal').style.display = 'none';
+}
+document.getElementById('previewModal').addEventListener('click', function(e) {
+  if (e.target === this) closePreview();
+});
+
+(function() {
+  // Select all / deselect
+  const checkAll = document.getElementById('checkAll');
+  const bulkBar  = document.getElementById('bulkBar');
+  const countEl  = document.getElementById('selectedCount');
+
+  function updateBulkBar() {
+    const checked = document.querySelectorAll('.row-check:checked');
+    countEl.textContent = checked.length;
+    bulkBar.style.display = checked.length > 0 ? 'flex' : 'none';
+  }
+
+  checkAll.addEventListener('change', function() {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = this.checked);
+    updateBulkBar();
+  });
+
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const all = document.querySelectorAll('.row-check');
+      checkAll.checked = [...all].every(c => c.checked);
+      updateBulkBar();
+    });
+  });
+
+  // Sort headers
+  document.querySelectorAll('[data-sort]').forEach(el => {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', function() {
+      const col   = this.dataset.sort;
+      const cur   = document.getElementById('sortInput').value;
+      const order = document.getElementById('orderInput').value;
+      document.getElementById('sortInput').value  = col;
+      document.getElementById('orderInput').value = (cur === col && order === 'ASC') ? 'DESC' : 'ASC';
+      document.getElementById('searchForm').submit();
+    });
+  });
+
+  // Relative time
+  document.querySelectorAll('.reltime').forEach(el => {
+    const ts = el.dataset.ts;
+    if (!ts) return;
+    const d = new Date(ts);
+    if (isNaN(d)) return;
+    const diff = Math.floor((Date.now() - d) / 1000);
+    let label;
+    if      (diff < 60)   label = diff + 's ago';
+    else if (diff < 3600) label = Math.floor(diff/60) + 'm ago';
+    else if (diff < 86400)label = Math.floor(diff/3600) + 'h ago';
+    else                  label = Math.floor(diff/86400) + 'd ago';
+    el.textContent = label;
+    el.title = d.toLocaleString();
+  });
+})();
+</script>
 {{end}}

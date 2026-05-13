@@ -9,14 +9,16 @@ import (
 )
 
 type Subtitle struct {
-	id        uuid.UUID
-	mediaInfo *valueobject.MediaInfo
-	status    valueobject.SubtitleStatus
-	engPath   string
-	lastError string
-	embedded  bool
-	createdAt time.Time
-	updatedAt time.Time
+	id          uuid.UUID
+	mediaInfo   *valueobject.MediaInfo
+	status      valueobject.SubtitleStatus
+	engPath     string
+	lastError   string
+	embedded    bool
+	retryCount  int
+	lastRetryAt *time.Time
+	createdAt   time.Time
+	updatedAt   time.Time
 }
 
 func NewSubtitle(mediaInfo *valueobject.MediaInfo, engPath string) (*Subtitle, error) {
@@ -42,29 +44,58 @@ func RestoreSubtitle(
 	embedded bool,
 	createdAt, updatedAt time.Time,
 ) (*Subtitle, error) {
+	return RestoreSubtitleFull(id, mediaInfo, engPath, status, lastError, embedded, 0, nil, createdAt, updatedAt)
+}
+
+func RestoreSubtitleFull(
+	id uuid.UUID,
+	mediaInfo *valueobject.MediaInfo,
+	engPath string,
+	status valueobject.SubtitleStatus,
+	lastError string,
+	embedded bool,
+	retryCount int,
+	lastRetryAt *time.Time,
+	createdAt, updatedAt time.Time,
+) (*Subtitle, error) {
 	if engPath == "" {
 		return nil, &exception.InvalidSubtitleException{Message: "engPath cannot be empty"}
 	}
 	return &Subtitle{
-		id:        id,
-		mediaInfo: mediaInfo,
-		status:    status,
-		engPath:   engPath,
-		lastError: lastError,
-		embedded:  embedded,
-		createdAt: createdAt,
-		updatedAt: updatedAt,
+		id:          id,
+		mediaInfo:   mediaInfo,
+		status:      status,
+		engPath:     engPath,
+		lastError:   lastError,
+		embedded:    embedded,
+		retryCount:  retryCount,
+		lastRetryAt: lastRetryAt,
+		createdAt:   createdAt,
+		updatedAt:   updatedAt,
 	}, nil
 }
 
-func (s *Subtitle) ID() uuid.UUID                  { return s.id }
-func (s *Subtitle) EngPath() string                { return s.engPath }
+func (s *Subtitle) ID() uuid.UUID                      { return s.id }
+func (s *Subtitle) EngPath() string                    { return s.engPath }
 func (s *Subtitle) Status() valueobject.SubtitleStatus { return s.status }
-func (s *Subtitle) LastError() string              { return s.lastError }
-func (s *Subtitle) Embedded() bool                 { return s.embedded }
-func (s *Subtitle) CreatedAt() time.Time           { return s.createdAt }
-func (s *Subtitle) UpdatedAt() time.Time           { return s.updatedAt }
-func (s *Subtitle) MediaInfo() *valueobject.MediaInfo { return s.mediaInfo }
+func (s *Subtitle) LastError() string                  { return s.lastError }
+func (s *Subtitle) Embedded() bool                     { return s.embedded }
+func (s *Subtitle) RetryCount() int                    { return s.retryCount }
+func (s *Subtitle) LastRetryAt() *time.Time            { return s.lastRetryAt }
+func (s *Subtitle) CreatedAt() time.Time               { return s.createdAt }
+func (s *Subtitle) UpdatedAt() time.Time               { return s.updatedAt }
+func (s *Subtitle) MediaInfo() *valueobject.MediaInfo  { return s.mediaInfo }
+
+func (s *Subtitle) CanRetry(maxRetries int) bool {
+	return s.retryCount < maxRetries
+}
+
+func (s *Subtitle) IncrementRetry() {
+	s.retryCount++
+	now := time.Now()
+	s.lastRetryAt = &now
+	s.updatedAt = now
+}
 
 func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
 	if s.status.CanTransitionTo(newStatus) {

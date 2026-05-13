@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
 	"subsync/internal/core/domain/valueobject"
@@ -89,6 +93,8 @@ func (s *StatsService) SetTargetLanguage(ctx context.Context, code string) error
 	return s.settingsRepo.SetSetting(ctx, "target_language", code)
 }
 
+const maxRetries = 3
+
 func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
 	if err != nil {
@@ -97,6 +103,7 @@ func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	if err := subtitle.TransitionTo(valueobject.StatusQueued); err != nil {
 		return err
 	}
+	subtitle.IncrementRetry()
 	if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
 		return err
 	}
@@ -201,6 +208,97 @@ func (s *StatsService) ActivateAPIKey(ctx context.Context, id int) error {
 
 func (s *StatsService) ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
 	return s.subtitleRepo.FindByStatus(ctx, status)
+}
+
+func (s *StatsService) SearchRecords(ctx context.Context, f port.SubtitleFilter) (*port.SubtitlePage, error) {
+	return s.subtitleRepo.FindWithFilters(ctx, f)
+}
+
+func (s *StatsService) BulkReTranslate(ctx context.Context, engPaths []string) error {
+	targetLang := s.GetTargetLanguage(ctx)
+	for _, engPath := range engPaths {
+		subtitle, err := s.subtitleRepo.FindByPath(ctx, engPath)
+		if err != nil {
+			continue
+		}
+		if !subtitle.CanRetry(maxRetries) {
+			continue
+		}
+		if err := subtitle.TransitionTo(valueobject.StatusQueued); err != nil {
+			continue
+		}
+		subtitle.IncrementRetry()
+		if err := s.subtitleRepo.Save(ctx, subtitle); err != nil {
+			continue
+		}
+		_ = s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
+			EngPath:        engPath,
+			TargetLanguage: targetLang,
+		})
+	}
+	return nil
+}
+
+func (s *StatsService) BulkDelete(ctx context.Context, engPaths []string) error {
+	return s.subtitleRepo.DeleteMany(ctx, engPaths)
+}
+
+const modelPriorityKey = "model_priority"
+
+var defaultModelPriority = []string{
+	"gemini-3.1-flash",
+	"gemini-3.1-flash-lite",
+	"gemini-2.5-flash",
+	"gemini-2.5-flash-lite",
+	"gemini-3-flash-preview",
+	"gemini-3.1-pro",
+}
+
+func (s *StatsService) GetModelPriority(ctx context.Context) []string {
+	if s.settingsRepo == nil {
+		return defaultModelPriority
+	}
+	v, err := s.settingsRepo.GetSetting(ctx, modelPriorityKey)
+	if err != nil || v == "" {
+		return defaultModelPriority
+	}
+	var models []string
+	if err := json.Unmarshal([]byte(v), &models); err != nil {
+		return defaultModelPriority
+	}
+	return models
+}
+
+func (s *StatsService) SetModelPriority(ctx context.Context, models []string) error {
+	if s.settingsRepo == nil {
+		return fmt.Errorf("settings repository not available")
+	}
+	data, err := json.Marshal(models)
+	if err != nil {
+		return err
+	}
+	return s.settingsRepo.SetSetting(ctx, modelPriorityKey, string(data))
+}
+
+func (s *StatsService) GetTranslationPreview(ctx context.Context, engPath string) (string, error) {
+	targetLang := s.GetTargetLanguage(ctx)
+	basePath := strings.TrimSuffix(engPath, ".eng.srt")
+	basePath = strings.TrimSuffix(basePath, ".srt")
+	trPath := basePath + "." + targetLang + ".srt"
+
+	// Backward compat: old format used the raw extension stripped path
+	if _, err := os.Stat(trPath); os.IsNotExist(err) {
+		old := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + targetLang + ".srt"
+		if _, err2 := os.Stat(old); err2 == nil {
+			trPath = old
+		}
+	}
+
+	data, err := os.ReadFile(trPath)
+	if err != nil {
+		return "", fmt.Errorf("translation file not found: %w", err)
+	}
+	return string(data), nil
 }
 
 func (s *StatsService) ListWatchDirs(ctx context.Context) ([]*entity.WatchDir, error) {

@@ -35,6 +35,7 @@ func (s *HTTPServer) webSettings(c *gin.Context) {
 		FlashOK:            flashOK,
 		TargetLanguage:     s.statsUseCase.GetTargetLanguage(c.Request.Context()),
 		SupportedLanguages: langs,
+		ModelPriority:      s.statsUseCase.GetModelPriority(c.Request.Context()),
 	}
 	c.Status(http.StatusOK)
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -62,6 +63,19 @@ func (s *HTTPServer) webAddWatchDir(c *gin.Context) {
 func (s *HTTPServer) webToggleWatchDir(c *gin.Context) {
 	id := parseID(c.Param("id"))
 	if err := s.statsUseCase.ToggleWatchDir(c.Request.Context(), id); err != nil {
+		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg="+encodeMsg(err.Error()))
+		return
+	}
+	c.Redirect(http.StatusSeeOther, "/settings?flash=success")
+}
+
+func (s *HTTPServer) webSetModelPriority(c *gin.Context) {
+	models := c.PostFormArray("model[]")
+	if len(models) == 0 {
+		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg=no+models+provided")
+		return
+	}
+	if err := s.statsUseCase.SetModelPriority(c.Request.Context(), models); err != nil {
 		c.Redirect(http.StatusSeeOther, "/settings?flash=error&msg="+encodeMsg(err.Error()))
 		return
 	}

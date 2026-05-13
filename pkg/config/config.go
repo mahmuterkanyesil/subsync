@@ -22,6 +22,7 @@ type Config struct {
 	DashboardUsername string
 	DashboardPassword string
 	InternalLogToken  string
+	EncryptionSecret  string
 
 	//Worker
 	BatchSize         int
@@ -40,6 +41,7 @@ func Load() *Config {
 		DashboardUsername: getEnv("DASHBOARD_USERNAME", ""),
 		DashboardPassword: getEnv("DASHBOARD_PASSWORD", ""),
 		InternalLogToken:  getEnv("INTERNAL_LOG_TOKEN", ""),
+		EncryptionSecret:  getEnv("ENCRYPTION_SECRET", ""),
 		BatchSize:         getEnvInt("BATCH_SIZE", 500),
 		ScanIntervalSec:   getEnvInt("SCAN_INTERVAL_SEC", 30),
 		EmbedIntervalSec:  getEnvInt("EMBED_INTERVAL_SEC", 600),

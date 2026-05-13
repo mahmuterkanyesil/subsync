@@ -34,6 +34,12 @@ type StatsUseCase interface {
 	ActivateAPIKey(ctx context.Context, id int) error
 	ListRecordsByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 	DeleteSubtitle(ctx context.Context, engPath string) error
+	SearchRecords(ctx context.Context, f SubtitleFilter) (*SubtitlePage, error)
+	BulkReTranslate(ctx context.Context, engPaths []string) error
+	BulkDelete(ctx context.Context, engPaths []string) error
+	GetTranslationPreview(ctx context.Context, engPath string) (string, error)
+	GetModelPriority(ctx context.Context) []string
+	SetModelPriority(ctx context.Context, models []string) error
 	RefreshKeyStatuses(ctx context.Context) error
 	GetTargetLanguage(ctx context.Context) string
 	SetTargetLanguage(ctx context.Context, code string) error

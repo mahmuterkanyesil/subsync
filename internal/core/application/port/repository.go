@@ -17,14 +17,30 @@ type SubtitleStats struct {
 	EmbedFailed    int
 }
 
+type SubtitleFilter struct {
+	Query  string
+	Status valueobject.SubtitleStatus
+	SortBy string
+	Order  string
+	Limit  int
+	Offset int
+}
+
+type SubtitlePage struct {
+	Items []*entity.Subtitle
+	Total int
+}
+
 type SubtitleRepository interface {
 	Save(ctx context.Context, s *entity.Subtitle) error
 	FindByPath(ctx context.Context, path string) (*entity.Subtitle, error)
 	FindAll(ctx context.Context) ([]*entity.Subtitle, error)
 	FindPendingEmbed(ctx context.Context) ([]*entity.Subtitle, error)
 	Statistics(ctx context.Context) (*SubtitleStats, error)
-FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
+	FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error)
 	Delete(ctx context.Context, engPath string) error
+	DeleteMany(ctx context.Context, engPaths []string) error
+	FindWithFilters(ctx context.Context, f SubtitleFilter) (*SubtitlePage, error)
 }
 
 type AppSettingsRepository interface {

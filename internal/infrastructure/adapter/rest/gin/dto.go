@@ -16,6 +16,7 @@ type SubtitleResponse struct {
 	SeasonNumber  int    `json:"season_number,omitempty"`
 	EpisodeNumber int    `json:"episode_number,omitempty"`
 	Embedded      bool   `json:"embedded"`
+	RetryCount    int    `json:"retry_count,omitempty"`
 	LastError     string `json:"last_error,omitempty"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
@@ -43,6 +44,7 @@ func toSubtitleResponse(s *entity.Subtitle) SubtitleResponse {
 		SeasonNumber:  mi.SeasonNumber,
 		EpisodeNumber: mi.EpisodeNumber,
 		Embedded:      s.Embedded(),
+		RetryCount:    s.RetryCount(),
 		LastError:     s.LastError(),
 		CreatedAt:     s.CreatedAt().Format("2006-01-02T15:04:05Z"),
 		UpdatedAt:     s.UpdatedAt().Format("2006-01-02T15:04:05Z"),
@@ -181,6 +183,7 @@ type SettingsData struct {
 	FlashOK            bool
 	TargetLanguage     string
 	SupportedLanguages []valueobject.LanguageSpec
+	ModelPriority      []string
 }
 
 type DashboardData struct {
@@ -193,6 +196,18 @@ type RecordsData struct {
 	Records     []SubtitleResponse
 	Filter      string
 	Total       int
+	Query       string
+	SortBy      string
+	Order       string
+	Limit       int
+	Offset      int
+	TotalPages  int
+	HasPrev     bool
+	HasNext     bool
+	PrevOffset  int
+	NextOffset  int
+	Flash       string
+	FlashOK     bool
 }
 
 type KeysData struct {

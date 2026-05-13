@@ -5,15 +5,34 @@ import (
 	"database/sql"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/entity"
+	"subsync/pkg/crypto"
 	"time"
 )
 
 type SQLiteAPIKeyRepository struct {
-	db *sql.DB
+	db     *sql.DB
+	secret string
 }
 
 func NewSQLiteAPIKeyRepository(db *sql.DB) *SQLiteAPIKeyRepository {
 	return &SQLiteAPIKeyRepository{db: db}
+}
+
+func NewSQLiteAPIKeyRepositoryWithEncryption(db *sql.DB, secret string) *SQLiteAPIKeyRepository {
+	return &SQLiteAPIKeyRepository{db: db, secret: secret}
+}
+
+func (r *SQLiteAPIKeyRepository) encrypt(v string) string {
+	enc, err := crypto.EncryptValue(v, r.secret)
+	if err != nil {
+		return v
+	}
+	return enc
+}
+
+func (r *SQLiteAPIKeyRepository) decrypt(v string) string {
+	dec, _ := crypto.DecryptValue(v, r.secret)
+	return dec
 }
 
 func (r *SQLiteAPIKeyRepository) Save(ctx context.Context, k *entity.APIKey) error {
@@ -21,7 +40,7 @@ func (r *SQLiteAPIKeyRepository) Save(ctx context.Context, k *entity.APIKey) err
 	if k.ID() == 0 {
 		query := `INSERT INTO api_keys (service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err := r.db.ExecContext(ctx, query,
-			k.Service(), k.KeyValue(), k.Model(), k.IsActive(), k.IsQuotaExceeded(),
+			k.Service(), r.encrypt(k.KeyValue()), k.Model(), k.IsActive(), k.IsQuotaExceeded(),
 			k.QuotaResetTime(), k.RPMLimit(), k.TPMLimit(), k.RPDLimit(),
 			k.RequestMade(), k.LastUsedAt(), k.LastError(), now, now,
 		)
@@ -40,7 +59,7 @@ func (r *SQLiteAPIKeyRepository) FindByID(ctx context.Context, id int) (*entity.
 	query := `SELECT id, service, key_value, model, is_active, is_quota_exceeded, quota_reset_time, rpm_limit, tpm_limit, rpd_limit, request_made, last_used_at, last_error, created_at, updated_at FROM api_keys WHERE id = ?`
 
 	row := r.db.QueryRowContext(ctx, query, id)
-	return scanAPIKey(row)
+	return r.scanAPIKey(row)
 }
 
 func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service string) (*entity.APIKey, error) {
@@ -53,7 +72,7 @@ func (r *SQLiteAPIKeyRepository) FindNextAvailable(ctx context.Context, service 
 		LIMIT 1
 	`
 	row := r.db.QueryRowContext(ctx, query, service)
-	return scanAPIKey(row)
+	return r.scanAPIKey(row)
 }
 
 func (r *SQLiteAPIKeyRepository) ResetExpiredQuotas(ctx context.Context) error {
@@ -120,7 +139,7 @@ func (r *SQLiteAPIKeyRepository) FindAll(ctx context.Context) ([]*entity.APIKey,
 	defer rows.Close()
 	var keys []*entity.APIKey
 	for rows.Next() {
-		k, err := scanAPIKeyFromRows(rows)
+		k, err := r.scanAPIKeyFromRows(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +169,7 @@ func (r *SQLiteAPIKeyRepository) Delete(ctx context.Context, id int) error {
 	return err
 }
 
-func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
+func (r *SQLiteAPIKeyRepository) scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
 	var id, rpmLimit, tpmLimit, rpdLimit, requestMade int
 	var service, keyValue, model, lastError string
 	var isActive, isQuotaExceeded bool
@@ -167,10 +186,10 @@ func scanAPIKeyFromRows(rows *sql.Rows) (*entity.APIKey, error) {
 	lsu := parseTimePtr(lastUsedAtStr)
 	ca := parseTime(createdAtStr)
 	ua := parseTime(updatedAtStr)
-	return entity.RestoreAPIKey(id, service, keyValue, model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
+	return entity.RestoreAPIKey(id, service, r.decrypt(keyValue), model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
 }
 
-func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
+func (r *SQLiteAPIKeyRepository) scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 	var id, rpmLimit, tpmLimit, rpdLimit, requestMade int
 	var service, keyValue, model, lastError string
 	var isActive, isQuotaExceeded bool
@@ -187,5 +206,5 @@ func scanAPIKey(row *sql.Row) (*entity.APIKey, error) {
 	lsu := parseTimePtr(lastUsedAtStr)
 	ca := parseTime(createdAtStr)
 	ua := parseTime(updatedAtStr)
-	return entity.RestoreAPIKey(id, service, keyValue, model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
+	return entity.RestoreAPIKey(id, service, r.decrypt(keyValue), model, isActive, isQuotaExceeded, qrt, rpmLimit, tpmLimit, rpdLimit, requestMade, lsu, lastError, ca, ua)
 }
