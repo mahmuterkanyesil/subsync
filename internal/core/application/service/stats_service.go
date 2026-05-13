@@ -282,16 +282,9 @@ func (s *StatsService) SetModelPriority(ctx context.Context, models []string) er
 
 func (s *StatsService) GetTranslationPreview(ctx context.Context, engPath string) (string, error) {
 	targetLang := s.GetTargetLanguage(ctx)
-	basePath := strings.TrimSuffix(engPath, ".eng.srt")
-	basePath = strings.TrimSuffix(basePath, ".srt")
-	trPath := basePath + "." + targetLang + ".srt"
-
-	// Backward compat: old format used the raw extension stripped path
-	if _, err := os.Stat(trPath); os.IsNotExist(err) {
-		old := strings.TrimSuffix(engPath, filepath.Ext(engPath)) + "." + targetLang + ".srt"
-		if _, err2 := os.Stat(old); err2 == nil {
-			trPath = old
-		}
+	trPath := findTrSrtPath(engPath, targetLang)
+	if trPath == "" {
+		return "", fmt.Errorf("translation file not found next to %s", filepath.Base(engPath))
 	}
 
 	data, err := os.ReadFile(trPath)
@@ -299,6 +292,40 @@ func (s *StatsService) GetTranslationPreview(ctx context.Context, engPath string
 		return "", fmt.Errorf("translation file not found: %w", err)
 	}
 	return string(data), nil
+}
+
+// findTrSrtPath locates the translated .srt file adjacent to engPath.
+// It tries the canonical path first, then falls back to a glob search so it
+// works regardless of language code mismatches or legacy naming formats.
+func findTrSrtPath(engPath, targetLang string) string {
+	dir := filepath.Dir(engPath)
+
+	baseName := filepath.Base(engPath)
+	base := strings.TrimSuffix(baseName, ".eng.srt")
+	base = strings.TrimSuffix(base, ".srt")
+
+	// 1. canonical: base.tr.srt
+	if p := filepath.Join(dir, base+"."+targetLang+".srt"); fileExists(p) {
+		return p
+	}
+	// 2. legacy: base.eng.tr.srt
+	legacyBase := strings.TrimSuffix(baseName, filepath.Ext(baseName))
+	if p := filepath.Join(dir, legacyBase+"."+targetLang+".srt"); fileExists(p) {
+		return p
+	}
+	// 3. glob fallback: any base.*.srt that isn't the source file
+	matches, _ := filepath.Glob(filepath.Join(dir, base+".*.srt"))
+	for _, m := range matches {
+		if m != engPath {
+			return m
+		}
+	}
+	return ""
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
 
 func (s *StatsService) ListWatchDirs(ctx context.Context) ([]*entity.WatchDir, error) {
