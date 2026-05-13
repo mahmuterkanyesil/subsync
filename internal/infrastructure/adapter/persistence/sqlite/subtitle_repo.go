@@ -52,7 +52,7 @@ func (r *SQLiteSubtitleRepository) FindByPath(ctx context.Context, path string) 
 }
 
 func (r *SQLiteSubtitleRepository) FindAll(ctx context.Context) ([]*entity.Subtitle, error) {
-	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles`
+	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at FROM subtitles ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (r *SQLiteSubtitleRepository) FindPendingEmbed(ctx context.Context) ([]*ent
 
 func (r *SQLiteSubtitleRepository) FindByStatus(ctx context.Context, status valueobject.SubtitleStatus) ([]*entity.Subtitle, error) {
 	query := `SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
-		FROM subtitles WHERE status = ?`
+		FROM subtitles WHERE status = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, string(status))
 	if err != nil {
 		return nil, err
