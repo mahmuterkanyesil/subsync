@@ -191,7 +191,7 @@ func (r *SQLiteSubtitleRepository) FindWithFilters(ctx context.Context, f port.S
 	}
 
 	dataQuery := fmt.Sprintf(
-		`SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, created_at, updated_at
+		`SELECT id, eng_path, media_type, series_name, season_number, episode_number, status, last_error, embedded, retry_count, last_retry_at, created_at, updated_at
 		 FROM subtitles %s ORDER BY %s %s LIMIT ? OFFSET ?`,
 		whereClause, sortCol, order,
 	)
