@@ -26,6 +26,7 @@ func main() {
 
 	subtitleRepo := sqlite.NewSQLiteSubtitleRepository(db)
 	apiKeyRepo := sqlite.NewSQLiteAPIKeyRepository(db)
+	settingsRepo := sqlite.NewSQLiteAppSettingsRepository(db)
 
 	translator := gemini.NewGeminiTranslator()
 
@@ -38,6 +39,7 @@ func main() {
 		progressStore,
 		eventadapter.NewLogEventPublisher(),
 		cfg.BatchSize,
+		settingsRepo,
 	)
 
 	workerServer := asynq.NewAsynqWorkerServer(cfg.RedisURL, cfg.WorkerConcurrency, translationService)

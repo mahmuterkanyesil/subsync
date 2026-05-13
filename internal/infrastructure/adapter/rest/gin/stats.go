@@ -1,11 +1,23 @@
 package gin
 
 import (
+	"fmt"
 	"net/http"
+	"path/filepath"
+	"strings"
 	valueobject "subsync/internal/core/domain/valueobject"
 
 	"github.com/gin-gonic/gin"
 )
+
+func sanitizePath(p string) (string, error) {
+	for _, part := range strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }) {
+		if part == ".." {
+			return "", fmt.Errorf("invalid path")
+		}
+	}
+	return filepath.Clean(p), nil
+}
 
 // ─── Stats / Records — JSON API ───────────────────────────────────────────────
 
@@ -28,7 +40,11 @@ func (s *HTTPServer) listRecords(c *gin.Context) {
 }
 
 func (s *HTTPServer) findByPath(c *gin.Context) {
-	engPath := c.Param("engPath")
+	engPath, err := sanitizePath(c.Param("engPath"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		return
+	}
 	record, err := s.statsUseCase.FindByPath(c.Request.Context(), engPath)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -38,7 +54,11 @@ func (s *HTTPServer) findByPath(c *gin.Context) {
 }
 
 func (s *HTTPServer) reTranslate(c *gin.Context) {
-	engPath := c.Param("engPath")
+	engPath, err := sanitizePath(c.Param("engPath"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		return
+	}
 	if err := s.statsUseCase.ReTranslate(c.Request.Context(), engPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -47,7 +67,11 @@ func (s *HTTPServer) reTranslate(c *gin.Context) {
 }
 
 func (s *HTTPServer) reEmbed(c *gin.Context) {
-	engPath := c.Param("engPath")
+	engPath, err := sanitizePath(c.Param("engPath"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid path"})
+		return
+	}
 	if err := s.statsUseCase.ReEmbed(c.Request.Context(), engPath); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -105,7 +129,11 @@ func (s *HTTPServer) webRecords(c *gin.Context) {
 }
 
 func (s *HTTPServer) webRetry(c *gin.Context) {
-	engPath := c.PostForm("eng_path")
+	engPath, err := sanitizePath(c.PostForm("eng_path"))
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg=invalid+path")
+		return
+	}
 	if err := s.statsUseCase.ReTranslate(c.Request.Context(), engPath); err != nil {
 		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
 		return
@@ -114,7 +142,11 @@ func (s *HTTPServer) webRetry(c *gin.Context) {
 }
 
 func (s *HTTPServer) webReEmbed(c *gin.Context) {
-	engPath := c.PostForm("eng_path")
+	engPath, err := sanitizePath(c.PostForm("eng_path"))
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg=invalid+path")
+		return
+	}
 	if err := s.statsUseCase.ReEmbed(c.Request.Context(), engPath); err != nil {
 		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
 		return
@@ -123,7 +155,11 @@ func (s *HTTPServer) webReEmbed(c *gin.Context) {
 }
 
 func (s *HTTPServer) webDeleteRecord(c *gin.Context) {
-	engPath := c.PostForm("eng_path")
+	engPath, err := sanitizePath(c.PostForm("eng_path"))
+	if err != nil {
+		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg=invalid+path")
+		return
+	}
 	if err := s.statsUseCase.DeleteSubtitle(c.Request.Context(), engPath); err != nil {
 		c.Redirect(http.StatusSeeOther, "/records?flash=error&msg="+encodeMsg(err.Error()))
 		return

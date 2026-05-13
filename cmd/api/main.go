@@ -33,7 +33,7 @@ func main() {
 
 	statsService := service.NewStatsService(subtitleRepo, apiKeyRepo, watchDirRepo, taskQueue, settingsRepo)
 
-	server := gin.NewHTTPServer(statsService, cfg.APIPort)
+	server := gin.NewHTTPServer(statsService, cfg.APIPort, cfg.DashboardUsername, cfg.DashboardPassword, cfg.InternalLogToken)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

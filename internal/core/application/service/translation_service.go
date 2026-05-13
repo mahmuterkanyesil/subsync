@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"subsync/internal/core/application/port"
 	"subsync/internal/core/domain/event"
 	"subsync/internal/core/domain/valueobject"
@@ -21,9 +22,11 @@ type TranslationService struct {
 	translator      port.TranslationProvider
 	progress        port.ProgressStore
 	events          port.EventPublisher
+	settingsRepo    port.AppSettingsRepository
 	batchSize       int
 	modelPriority   []string
 	exhaustedModels map[string]time.Time
+	loadOnce        sync.Once
 }
 
 func NewTranslationService(
@@ -33,6 +36,7 @@ func NewTranslationService(
 	progress port.ProgressStore,
 	events port.EventPublisher,
 	batchSize int,
+	settingsRepo port.AppSettingsRepository,
 ) *TranslationService {
 	return &TranslationService{
 		subtitleRepo: subtitleRepo,
@@ -40,6 +44,7 @@ func NewTranslationService(
 		translator:   translator,
 		progress:     progress,
 		events:       events,
+		settingsRepo: settingsRepo,
 		batchSize:    batchSize,
 		modelPriority: []string{
 			"gemini-3.1-flash-lite",
@@ -51,11 +56,48 @@ func NewTranslationService(
 	}
 }
 
-func (s *TranslationService) pickModel() string {
+func (s *TranslationService) loadExhaustedModels(ctx context.Context) {
+	s.loadOnce.Do(func() {
+		if s.settingsRepo == nil {
+			return
+		}
+		for _, model := range s.modelPriority {
+			val, err := s.settingsRepo.GetSetting(ctx, "model_exhausted_"+model)
+			if err != nil || val == "" {
+				continue
+			}
+			resetAt, err := time.Parse(time.RFC3339, val)
+			if err != nil || time.Now().After(resetAt) {
+				_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, "")
+				continue
+			}
+			s.exhaustedModels[model] = resetAt
+			logger.Info("translate: loaded exhausted model from DB [model=%s reset=%s]", model, resetAt.Format(time.RFC3339))
+		}
+	})
+}
+
+func (s *TranslationService) markModelExhausted(ctx context.Context, model string, resetAt time.Time) {
+	s.exhaustedModels[model] = resetAt
+	if s.settingsRepo != nil {
+		_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, resetAt.Format(time.RFC3339))
+	}
+}
+
+func (s *TranslationService) clearModelExhausted(ctx context.Context, model string) {
+	delete(s.exhaustedModels, model)
+	if s.settingsRepo != nil {
+		_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, "")
+	}
+}
+
+func (s *TranslationService) pickModel(ctx context.Context) string {
 	now := time.Now()
 	for _, m := range s.modelPriority {
 		if t, ok := s.exhaustedModels[m]; !ok || now.After(t) {
-			delete(s.exhaustedModels, m)
+			if ok {
+				s.clearModelExhausted(ctx, m)
+			}
 			return m
 		}
 	}
@@ -86,6 +128,8 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	if !ok {
 		lang = valueobject.DefaultLanguage()
 	}
+
+	s.loadExhaustedModels(ctx)
 
 	// Reset any RPD quotas that have passed their reset time before attempting translation.
 	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
@@ -160,7 +204,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		}
 		batch := remaining[i:end]
 
-		currentModel := s.pickModel()
+		currentModel := s.pickModel(ctx)
 		if currentModel == "" {
 			resetAt := s.earliestModelReset()
 			logger.Warn("translate: all models exhausted for %s — next reset at %s", name, resetAt.Format(time.RFC3339))
@@ -198,7 +242,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 			case strings.Contains(errStr, "quota_exhausted_rpd"),
 				strings.Contains(errStr, "quota_exhausted"):
 				logger.Warn("translate: RPD quota hit for %s [model=%s] — switching model", name, currentModel)
-				s.exhaustedModels[currentModel] = time.Now().Add(24 * time.Hour)
+				s.markModelExhausted(ctx, currentModel, time.Now().Add(24*time.Hour))
 				batchNum--
 				continue
 

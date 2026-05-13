@@ -30,6 +30,9 @@ func Open(dbPath string) (*sql.DB, error) {
 	if _, err := db.Exec("PRAGMA synchronous = NORMAL"); err != nil {
 		return nil, err
 	}
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, err
+	}
 
 	if err := migrate(db); err != nil {
 		return nil, err

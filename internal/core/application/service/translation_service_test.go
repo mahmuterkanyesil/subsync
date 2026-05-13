@@ -61,7 +61,7 @@ func newTranslateSvc(
 	events port.EventPublisher,
 ) *TranslationService {
 	// batchSize=100 covers all blocks in one batch (avoids 10s inter-batch sleep)
-	return NewTranslationService(subRepo, keyRepo, translator, progress, events, 100)
+	return NewTranslationService(subRepo, keyRepo, translator, progress, events, 100, nil)
 }
 
 func makeKey(t *testing.T) *entity.APIKey {

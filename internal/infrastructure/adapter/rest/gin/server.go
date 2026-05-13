@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"subsync/internal/core/application/port"
 	"time"
 
@@ -59,64 +60,89 @@ func newTemplates() (*templates, error) {
 }
 
 type HTTPServer struct {
-	statsUseCase port.StatsUseCase
-	port         string
-	tmpl         *templates
+	statsUseCase      port.StatsUseCase
+	port              string
+	tmpl              *templates
+	dashboardUsername string
+	dashboardPassword string
+	internalLogToken  string
 }
 
-func NewHTTPServer(statsUseCase port.StatsUseCase, port string) *HTTPServer {
+func NewHTTPServer(statsUseCase port.StatsUseCase, port, username, password, logToken string) *HTTPServer {
 	tmpl, err := newTemplates()
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse templates: %v", err))
 	}
 	return &HTTPServer{
-		statsUseCase: statsUseCase,
-		port:         port,
-		tmpl:         tmpl,
+		statsUseCase:      statsUseCase,
+		port:              port,
+		tmpl:              tmpl,
+		dashboardUsername: username,
+		dashboardPassword: password,
+		internalLogToken:  logToken,
+	}
+}
+
+func (s *HTTPServer) basicAuthMiddleware() gin.HandlerFunc {
+	return gin.BasicAuth(gin.Accounts{s.dashboardUsername: s.dashboardPassword})
+}
+
+func (s *HTTPServer) internalTokenMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if s.internalLogToken != "" && c.GetHeader("X-Internal-Token") != s.internalLogToken {
+			c.AbortWithStatus(http.StatusUnauthorized)
+			return
+		}
+		c.Next()
 	}
 }
 
 func (s *HTTPServer) Start(ctx context.Context) error {
 	r := gin.Default()
 
-	api := r.Group("/api")
-	{
-		api.GET("/health", s.health)
-		api.GET("/stats", s.getStats)
-		api.GET("/records", s.listRecords)
-		api.GET("/records/:engPath", s.findByPath)
-		api.POST("/records/:engPath/retry", s.reTranslate)
-		api.POST("/records/:engPath/re-embed", s.reEmbed)
-		api.POST("/keys", s.addApiKey)
-		api.POST("/keys/:id/disable", s.disableApiKey)
-		api.POST("/keys/:id/reset-quota", s.resetQuota)
-		api.POST("/keys/:id/model", s.updateApiKeyModel)
-		api.GET("/logs", s.apiLogs)
-		api.POST("/internal/logs", s.receiveLog)
-		api.GET("/prompts", s.getPrompt)
-		api.POST("/prompts", s.setPrompt)
+	// /health ve /api/internal/logs auth dışında
+	r.GET("/health", s.health)
+	r.POST("/api/internal/logs", s.internalTokenMiddleware(), s.receiveLog)
+
+	var protected gin.IRoutes
+	if s.dashboardUsername != "" {
+		protected = r.Group("/", s.basicAuthMiddleware())
+	} else {
+		protected = r.Group("/")
 	}
 
-	r.GET("/health", s.health)
+	protected.GET("/api/health", s.health)
+	protected.GET("/api/stats", s.getStats)
+	protected.GET("/api/records", s.listRecords)
+	protected.GET("/api/records/:engPath", s.findByPath)
+	protected.POST("/api/records/:engPath/retry", s.reTranslate)
+	protected.POST("/api/records/:engPath/re-embed", s.reEmbed)
+	protected.POST("/api/keys", s.addApiKey)
+	protected.POST("/api/keys/:id/disable", s.disableApiKey)
+	protected.POST("/api/keys/:id/reset-quota", s.resetQuota)
+	protected.POST("/api/keys/:id/model", s.updateApiKeyModel)
+	protected.GET("/api/logs", s.apiLogs)
+	protected.GET("/api/prompts", s.getPrompt)
+	protected.POST("/api/prompts", s.setPrompt)
 
-	r.GET("/", s.webDashboard)
-	r.GET("/logs", s.webLogs)
-	r.GET("/records", s.webRecords)
-	r.POST("/records/retry", s.webRetry)
-	r.POST("/records/re-embed", s.webReEmbed)
-	r.POST("/records/delete", s.webDeleteRecord)
-	r.GET("/keys", s.webKeys)
-	r.POST("/keys", s.webAddKey)
-	r.POST("/keys/:id/delete", s.webDeleteKey)
-	r.POST("/keys/:id/activate", s.webActivateKey)
-	r.POST("/keys/:id/disable", s.webDisableKey)
-	r.POST("/keys/:id/reset-quota", s.webResetQuota)
-	r.POST("/keys/:id/model", s.webUpdateKeyModel)
-	r.GET("/settings", s.webSettings)
-	r.POST("/settings/language", s.webSetLanguage)
-	r.POST("/settings/dirs", s.webAddWatchDir)
-	r.POST("/settings/dirs/:id/toggle", s.webToggleWatchDir)
-	r.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
+	protected.GET("/", s.webDashboard)
+	protected.GET("/logs", s.webLogs)
+	protected.GET("/records", s.webRecords)
+	protected.POST("/records/retry", s.webRetry)
+	protected.POST("/records/re-embed", s.webReEmbed)
+	protected.POST("/records/delete", s.webDeleteRecord)
+	protected.GET("/keys", s.webKeys)
+	protected.POST("/keys", s.webAddKey)
+	protected.POST("/keys/:id/delete", s.webDeleteKey)
+	protected.POST("/keys/:id/activate", s.webActivateKey)
+	protected.POST("/keys/:id/disable", s.webDisableKey)
+	protected.POST("/keys/:id/reset-quota", s.webResetQuota)
+	protected.POST("/keys/:id/model", s.webUpdateKeyModel)
+	protected.GET("/settings", s.webSettings)
+	protected.POST("/settings/language", s.webSetLanguage)
+	protected.POST("/settings/dirs", s.webAddWatchDir)
+	protected.POST("/settings/dirs/:id/toggle", s.webToggleWatchDir)
+	protected.POST("/settings/dirs/:id/delete", s.webDeleteWatchDir)
 
 	srv := &http.Server{
 		Addr:    ":" + s.port,
@@ -162,7 +188,7 @@ func parseID(s string) int {
 }
 
 func encodeMsg(s string) string {
-	return filepath.Base(s)
+	return strings.NewReplacer(" ", "+", "&", "", "=", "", "?", "").Replace(s)
 }
 
 func resolveFlash(flash, msg string) (string, bool) {

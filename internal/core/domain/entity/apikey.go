@@ -159,6 +159,7 @@ func (a *APIKey) MarkAsQuotaExceeded(quotaResetTime time.Time, lastError string)
 func (a *APIKey) ResetQuota() {
 	a.isQuotaExceeded = false
 	a.quotaResetTime = nil
+	a.requestMade = 0
 	a.updatedAt = time.Now()
 }
 

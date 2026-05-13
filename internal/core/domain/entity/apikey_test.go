@@ -127,6 +127,22 @@ func TestRestoreAPIKey_Valid(t *testing.T) {
 	assert.Equal(t, "some error", k.LastError())
 }
 
+func TestAPIKey_ResetQuota_ResetsRequestMade(t *testing.T) {
+	k, err := entity.NewAPIKey("gemini", "key-abc")
+	require.NoError(t, err)
+
+	k.MarkAsUsed()
+	k.MarkAsUsed()
+	require.Equal(t, 2, k.RequestMade())
+
+	k.MarkAsQuotaExceeded(time.Now().Add(24*time.Hour), "rpd error")
+	k.ResetQuota()
+
+	assert.Equal(t, 0, k.RequestMade())
+	assert.False(t, k.IsQuotaExceeded())
+	assert.Nil(t, k.QuotaResetTime())
+}
+
 func TestRestoreAPIKey_EmptyService_ReturnsError(t *testing.T) {
 	_, err := entity.RestoreAPIKey(1, "", "key", "gemini", false, false, nil, 15, 1000000, 1500, 0, nil, "", time.Now(), time.Now())
 	require.Error(t, err)
