@@ -130,7 +130,7 @@ func (s *ScanningService) Scan(ctx context.Context) error {
 				return nil
 			}
 			if hasTarget {
-				logger.Info("skip (has %s sub): %s", langCode, filepath.Base(path))
+				logger.Debug("skip (has %s sub): %s", langCode, filepath.Base(path))
 				return nil
 			}
 
