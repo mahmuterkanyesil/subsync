@@ -13,7 +13,7 @@ type modelSpec struct{ rpm, tpm, rpd int }
 
 // knownModelSpecs maps Gemini model IDs to their free-tier rate limits.
 var knownModelSpecs = map[string]modelSpec{
-	"gemini-3.1-flash-lite-preview": {rpm: 15, tpm: 250_000, rpd: 500},
+	"gemini-3.1-flash-lite": {rpm: 15, tpm: 250_000, rpd: 500},
 	"gemini-2.5-flash-lite":         {rpm: 10, tpm: 250_000, rpd: 50},
 	"gemini-2.5-flash":              {rpm: 5, tpm: 250_000, rpd: 25},
 	"gemini-3-flash-preview":        {rpm: 5, tpm: 250_000, rpd: 25},

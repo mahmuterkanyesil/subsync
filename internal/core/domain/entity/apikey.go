@@ -36,7 +36,7 @@ func NewAPIKey(service string, keyValue string) (*APIKey, error) {
 	return &APIKey{
 		service:   service,
 		keyValue:  keyValue,
-		model:     "gemini-3.1-flash-lite-preview",
+		model:     "gemini-3.1-flash-lite",
 		isActive:  true,
 		rpmLimit:  15,
 		tpmLimit:  250_000,
