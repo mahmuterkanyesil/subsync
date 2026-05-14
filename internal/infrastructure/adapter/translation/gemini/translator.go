@@ -242,6 +242,13 @@ func (g *GeminiTranslator) parseResponse(response string, original []port.SRTBlo
 
 func (g *GeminiTranslator) handleError(err error) error {
 	errStr := strings.ToLower(err.Error())
+
+	is503 := strings.Contains(errStr, "503") || strings.Contains(errStr, "unavailable") ||
+		strings.Contains(errStr, "high demand") || strings.Contains(errStr, "overloaded")
+	if is503 {
+		return fmt.Errorf("service_unavailable: %w", err)
+	}
+
 	is429 := strings.Contains(errStr, "429") || strings.Contains(errStr, "resource_exhausted")
 	if !is429 {
 		return err

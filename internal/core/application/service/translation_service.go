@@ -287,6 +287,16 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		if err != nil {
 			errStr := err.Error()
 			switch {
+			case strings.Contains(errStr, "service_unavailable"):
+				logger.Warn("translate: Gemini 503 for %s [model=%s] — waiting 60s", name, currentModel)
+				_ = s.progress.Save(ctx, engPath, translated)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(60 * time.Second):
+				}
+				continue
+
 			case strings.Contains(errStr, "quota_exhausted_rpm"):
 				logger.Warn("translate: RPM quota hit for %s [model=%s] — waiting 60s", name, currentModel)
 				_ = s.progress.Save(ctx, engPath, translated)
