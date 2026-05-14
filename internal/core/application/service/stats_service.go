@@ -287,7 +287,10 @@ func (s *StatsService) GetTranslationPreview(ctx context.Context, engPath string
 	targetLang := s.GetTargetLanguage(ctx)
 	trPath := findTrSrtPath(engPath, targetLang)
 	if trPath == "" {
-		return "", fmt.Errorf("translation file not found next to %s", filepath.Base(engPath))
+		dir := filepath.Dir(engPath)
+		base := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(engPath), ".eng.srt"), ".srt")
+		return "", fmt.Errorf("translation file not found — searched %s/%s.%s.srt (and glob %s/%s.*.srt)",
+			dir, base, targetLang, dir, base)
 	}
 
 	data, err := os.ReadFile(trPath)

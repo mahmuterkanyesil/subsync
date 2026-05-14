@@ -205,11 +205,12 @@ function showPreview(engPath) {
   pre.textContent = 'Loading…';
   fetch('/api/records/preview?eng_path=' + encodeURIComponent(engPath), {credentials: 'same-origin'})
     .then(r => r.json())
-    .then(d => {
-      if (d.content) {
-        pre.textContent = d.content;
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+      if (ok && data.content) {
+        pre.textContent = data.content;
       } else {
-        pre.textContent = '⚠ Translation file not found.\n\nThe .tr.srt file may have been removed after embedding.';
+        pre.textContent = '⚠ ' + (data.error || 'Translation file not found.');
       }
     })
     .catch(() => { pre.textContent = 'Failed to load preview.'; });
