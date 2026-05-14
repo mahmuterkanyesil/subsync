@@ -68,7 +68,7 @@
           <td><span class="reltime" data-ts="{{.UpdatedAt}}">{{.UpdatedAt}}</span></td>
           <td>
             {{if or (eq .Status "done") (eq .Status "embedded")}}
-            <button type="button" class="btn btn-secondary btn-sm" onclick="showPreview('{{.EngPath}}')">Preview</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-eng-path="{{.EngPath}}" onclick="showPreview(this.dataset.engPath)">Preview</button>
             {{end}}
             {{if or (eq .Status "error") (eq .Status "quota_exhausted")}}
             <form method="POST" action="/records/retry" style="display:inline">
