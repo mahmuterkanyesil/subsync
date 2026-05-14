@@ -100,6 +100,9 @@ func (s *StatsService) ReTranslate(ctx context.Context, engPath string) error {
 	if err != nil {
 		return err
 	}
+	if !subtitle.CanRetry(maxRetries) {
+		return fmt.Errorf("max retries (%d) exceeded", maxRetries)
+	}
 	if err := subtitle.TransitionTo(valueobject.StatusQueued); err != nil {
 		return err
 	}

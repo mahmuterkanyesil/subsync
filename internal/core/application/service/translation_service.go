@@ -25,6 +25,7 @@ type TranslationService struct {
 	events          port.EventPublisher
 	settingsRepo    port.AppSettingsRepository
 	batchSize       int
+	mu              sync.Mutex // protects modelPriority and exhaustedModels
 	modelPriority   []string
 	exhaustedModels map[string]time.Time
 	loadOnce        sync.Once
@@ -47,12 +48,7 @@ func NewTranslationService(
 		events:       events,
 		settingsRepo: settingsRepo,
 		batchSize:    batchSize,
-		modelPriority: []string{
-			"gemini-3.1-flash-lite",
-			"gemini-2.5-flash",
-			"gemini-2.5-flash-lite",
-			"gemini-3-flash-preview",
-		},
+		modelPriority: append([]string(nil), defaultModelPriority...),
 		exhaustedModels: make(map[string]time.Time),
 	}
 }
@@ -69,18 +65,28 @@ func (s *TranslationService) loadModelPriority(ctx context.Context) {
 	if err := json.Unmarshal([]byte(val), &models); err != nil || len(models) == 0 {
 		return
 	}
+	s.mu.Lock()
 	s.modelPriority = models
+	s.mu.Unlock()
 }
 
 func (s *TranslationService) resolveModel(ctx context.Context, keyModel string) string {
+	if keyModel == "" {
+		return s.pickModel(ctx)
+	}
+	s.mu.Lock()
 	now := time.Now()
-	if keyModel != "" {
-		if t, ok := s.exhaustedModels[keyModel]; !ok || now.After(t) {
-			if ok {
-				s.clearModelExhausted(ctx, keyModel)
-			}
-			return keyModel
+	t, wasExhausted := s.exhaustedModels[keyModel]
+	keyAvailable := !wasExhausted || now.After(t)
+	if keyAvailable && wasExhausted {
+		delete(s.exhaustedModels, keyModel)
+	}
+	s.mu.Unlock()
+	if keyAvailable {
+		if wasExhausted && s.settingsRepo != nil {
+			_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+keyModel, "")
 		}
+		return keyModel
 	}
 	return s.pickModel(ctx)
 }
@@ -90,7 +96,12 @@ func (s *TranslationService) loadExhaustedModels(ctx context.Context) {
 		if s.settingsRepo == nil {
 			return
 		}
-		for _, model := range s.modelPriority {
+		s.mu.Lock()
+		models := make([]string, len(s.modelPriority))
+		copy(models, s.modelPriority)
+		s.mu.Unlock()
+
+		for _, model := range models {
 			val, err := s.settingsRepo.GetSetting(ctx, "model_exhausted_"+model)
 			if err != nil || val == "" {
 				continue
@@ -100,40 +111,47 @@ func (s *TranslationService) loadExhaustedModels(ctx context.Context) {
 				_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, "")
 				continue
 			}
+			s.mu.Lock()
 			s.exhaustedModels[model] = resetAt
+			s.mu.Unlock()
 			logger.Info("translate: loaded exhausted model from DB [model=%s reset=%s]", model, resetAt.Format(time.RFC3339))
 		}
 	})
 }
 
 func (s *TranslationService) markModelExhausted(ctx context.Context, model string, resetAt time.Time) {
+	s.mu.Lock()
 	s.exhaustedModels[model] = resetAt
+	s.mu.Unlock()
 	if s.settingsRepo != nil {
 		_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, resetAt.Format(time.RFC3339))
 	}
 }
 
-func (s *TranslationService) clearModelExhausted(ctx context.Context, model string) {
-	delete(s.exhaustedModels, model)
-	if s.settingsRepo != nil {
-		_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+model, "")
-	}
-}
-
 func (s *TranslationService) pickModel(ctx context.Context) string {
+	s.mu.Lock()
 	now := time.Now()
+	var chosen, toClear string
 	for _, m := range s.modelPriority {
 		if t, ok := s.exhaustedModels[m]; !ok || now.After(t) {
+			chosen = m
 			if ok {
-				s.clearModelExhausted(ctx, m)
+				toClear = m
+				delete(s.exhaustedModels, m)
 			}
-			return m
+			break
 		}
 	}
-	return ""
+	s.mu.Unlock()
+	if toClear != "" && s.settingsRepo != nil {
+		_ = s.settingsRepo.SetSetting(ctx, "model_exhausted_"+toClear, "")
+	}
+	return chosen
 }
 
 func (s *TranslationService) earliestModelReset() time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var earliest time.Time
 	for _, t := range s.exhaustedModels {
 		if earliest.IsZero() || t.Before(earliest) {
@@ -188,14 +206,17 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	}
 
 	if _, statErr := os.Stat(trPath); statErr == nil {
-		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr == nil {
-			if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr == nil {
-				_ = s.progress.Clear(ctx, engPath)
-				logger.Info("translate recovered: %s", filepath.Base(engPath))
-				s.publish(event.NewTranslationCompleted(engPath))
-				return nil
-			}
+		if transErr := subtitle.TransitionTo(valueobject.StatusDone); transErr != nil {
+			logger.Warn("translate recovery: status transition failed for %s: %v", filepath.Base(engPath), transErr)
+			return transErr
 		}
+		if saveErr := s.subtitleRepo.Save(ctx, subtitle); saveErr != nil {
+			logger.Warn("translate recovery: db save failed for %s: %v", filepath.Base(engPath), saveErr)
+			return saveErr
+		}
+		_ = s.progress.Clear(ctx, engPath)
+		logger.Info("translate recovered: %s", filepath.Base(engPath))
+		s.publish(event.NewTranslationCompleted(engPath))
 		return nil
 	}
 

@@ -296,12 +296,12 @@ func TestTranslationService_Translate_AllModelsExhausted_WaitsForReset(t *testin
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 
-	// 4 models × 1 call each = 4 RPD failures → all models exhausted.
-	// FindNextAvailable is called once more on the 5th iteration before the exhaustion
+	// 6 models (defaultModelPriority) × 1 call each = 6 RPD failures → all models exhausted.
+	// FindNextAvailable is called once more on the 7th iteration before the exhaustion
 	// is detected (key is found first, then resolveModel returns "").
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(5)
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(7)
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
-		Return(nil, quotaErr).Times(4)
+		Return(nil, quotaErr).Times(6)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil).Once()
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
@@ -490,11 +490,11 @@ func TestTranslationService_Translate_KeyModelExhausted_FallsBackToPriorityList(
 	// First attempt uses the key's model; RPD hit exhausts it
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
 		key.KeyValue(), "gemini-2.5-flash", mock.Anything).Return(nil, quotaErr).Once()
-	// Fallback: first non-exhausted model from hardcoded priority ("gemini-3.1-flash-lite")
+	// Fallback: first non-exhausted model from defaultModelPriority ("gemini-3.1-flash")
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
-		key.KeyValue(), "gemini-3.1-flash-lite", mock.Anything).Return(translated, nil).Once()
+		key.KeyValue(), "gemini-3.1-flash", mock.Anything).Return(translated, nil).Once()
 	keyRepo.On("Save", mock.Anything, key).Return(nil)
-	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), "gemini-3.1-flash-lite").Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), "gemini-3.1-flash").Return(nil)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
 	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
@@ -531,8 +531,8 @@ func TestTranslationService_Translate_ModelPriorityLoadedFromSettings(t *testing
 	// DB priority puts "gemini-2.5-flash" first; hardcoded default starts with "gemini-3.1-flash-lite"
 	settingsRepo.On("GetSetting", mock.Anything, "model_priority").
 		Return(`["gemini-2.5-flash","gemini-3.1-flash-lite"]`, nil)
-	// loadExhaustedModels queries model_exhausted_* for each hardcoded model
-	for _, m := range []string{"gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash-preview"} {
+	// loadExhaustedModels queries model_exhausted_* for each model in defaultModelPriority
+	for _, m := range defaultModelPriority {
 		settingsRepo.On("GetSetting", mock.Anything, "model_exhausted_"+m).Return("", nil)
 	}
 
