@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -54,6 +55,34 @@ func NewTranslationService(
 		},
 		exhaustedModels: make(map[string]time.Time),
 	}
+}
+
+func (s *TranslationService) loadModelPriority(ctx context.Context) {
+	if s.settingsRepo == nil {
+		return
+	}
+	val, err := s.settingsRepo.GetSetting(ctx, "model_priority")
+	if err != nil || val == "" {
+		return
+	}
+	var models []string
+	if err := json.Unmarshal([]byte(val), &models); err != nil || len(models) == 0 {
+		return
+	}
+	s.modelPriority = models
+}
+
+func (s *TranslationService) resolveModel(ctx context.Context, keyModel string) string {
+	now := time.Now()
+	if keyModel != "" {
+		if t, ok := s.exhaustedModels[keyModel]; !ok || now.After(t) {
+			if ok {
+				s.clearModelExhausted(ctx, keyModel)
+			}
+			return keyModel
+		}
+	}
+	return s.pickModel(ctx)
 }
 
 func (s *TranslationService) loadExhaustedModels(ctx context.Context) {
@@ -130,6 +159,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	}
 
 	s.loadExhaustedModels(ctx)
+	s.loadModelPriority(ctx)
 
 	// Reset any RPD quotas that have passed their reset time before attempting translation.
 	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
@@ -204,7 +234,15 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		}
 		batch := remaining[i:end]
 
-		currentModel := s.pickModel(ctx)
+		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
+		if err != nil {
+			subtitle.MarkError(fmt.Errorf("no active api keys for gemini"))
+			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
+			_ = s.subtitleRepo.Save(ctx, subtitle)
+			return fmt.Errorf("no active api keys configured for service gemini")
+		}
+
+		currentModel := s.resolveModel(ctx, apiKey.Model())
 		if currentModel == "" {
 			resetAt := s.earliestModelReset()
 			logger.Warn("translate: all models exhausted for %s — next reset at %s", name, resetAt.Format(time.RFC3339))
@@ -212,14 +250,6 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
 			_ = s.subtitleRepo.Save(ctx, subtitle)
 			return fmt.Errorf("all models exhausted")
-		}
-
-		apiKey, err := s.apiKeyRepo.FindNextAvailable(ctx, "gemini")
-		if err != nil {
-			subtitle.MarkError(fmt.Errorf("no active api keys for gemini"))
-			_ = subtitle.TransitionTo(valueobject.StatusQuotaExhausted)
-			_ = s.subtitleRepo.Save(ctx, subtitle)
-			return fmt.Errorf("no active api keys configured for service gemini")
 		}
 
 		batchNum++

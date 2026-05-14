@@ -64,6 +64,24 @@ func newTranslateSvc(
 	return NewTranslationService(subRepo, keyRepo, translator, progress, events, 100, nil)
 }
 
+func newTranslateSvcWithSettings(
+	subRepo *testmocks.MockSubtitleRepository,
+	keyRepo *testmocks.MockAPIKeyRepository,
+	translator *testmocks.MockTranslationProvider,
+	progress port.ProgressStore,
+	events port.EventPublisher,
+	settings *testmocks.MockAppSettingsRepository,
+) *TranslationService {
+	return NewTranslationService(subRepo, keyRepo, translator, progress, events, 100, settings)
+}
+
+func makeKeyWithModel(t *testing.T, model string) *entity.APIKey {
+	t.Helper()
+	k := makeKey(t)
+	k.SetModel(model)
+	return k
+}
+
 func makeKey(t *testing.T) *entity.APIKey {
 	t.Helper()
 	k, err := entity.NewAPIKey("gemini", "test-key-abc")
@@ -278,8 +296,10 @@ func TestTranslationService_Translate_AllModelsExhausted_WaitsForReset(t *testin
 	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
 	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
 
-	// 4 models × 1 call each = 4 RPD failures → all models exhausted
-	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(4)
+	// 4 models × 1 call each = 4 RPD failures → all models exhausted.
+	// FindNextAvailable is called once more on the 5th iteration before the exhaustion
+	// is detected (key is found first, then resolveModel returns "").
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil).Times(5)
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, quotaErr).Times(4)
 	subRepo.On("Save", mock.Anything, subtitle).Return(nil).Once()
@@ -401,6 +421,139 @@ func TestTranslationService_Translate_PublishesEventOnSuccess(t *testing.T) {
 	tc, ok := published.(event.TranslationCompleted)
 	require.True(t, ok)
 	assert.Equal(t, engPath, tc.EngPath)
+}
+
+// TestTranslationService_Translate_UsesAPIKeyModel verifies that when an API key
+// has a specific model assigned, that model is used in the translation request
+// instead of the first model in the hardcoded priority list.
+func TestTranslationService_Translate_UsesAPIKeyModel(t *testing.T) {
+	engPath := makeEngSRT(t, srtContent())
+	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
+
+	subRepo := &testmocks.MockSubtitleRepository{}
+	keyRepo := &testmocks.MockAPIKeyRepository{}
+	translator := &testmocks.MockTranslationProvider{}
+	progressStore := &testmocks.MockProgressStore{}
+	defer subRepo.AssertExpectations(t)
+	defer keyRepo.AssertExpectations(t)
+	defer translator.AssertExpectations(t)
+	defer progressStore.AssertExpectations(t)
+
+	// "gemini-2.5-flash" is NOT the first in the hardcoded priority list
+	key := makeKeyWithModel(t, "gemini-2.5-flash")
+	translated := turkishBlocks()
+
+	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
+	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
+	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
+	// Exact model match — fails if service uses a different model
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
+		key.KeyValue(), "gemini-2.5-flash", mock.Anything).Return(translated, nil)
+	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), "gemini-2.5-flash").Return(nil)
+	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
+	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
+	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
+
+	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
+	err := svc.Translate(context.Background(), engPath, "tr")
+
+	require.NoError(t, err)
+	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
+}
+
+// TestTranslationService_Translate_KeyModelExhausted_FallsBackToPriorityList verifies
+// that when an API key's model hits an RPD quota, the service falls back to the
+// next available model in the priority list.
+func TestTranslationService_Translate_KeyModelExhausted_FallsBackToPriorityList(t *testing.T) {
+	engPath := makeEngSRT(t, srtContent())
+	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
+
+	subRepo := &testmocks.MockSubtitleRepository{}
+	keyRepo := &testmocks.MockAPIKeyRepository{}
+	translator := &testmocks.MockTranslationProvider{}
+	progressStore := &testmocks.MockProgressStore{}
+	defer subRepo.AssertExpectations(t)
+	defer keyRepo.AssertExpectations(t)
+	defer translator.AssertExpectations(t)
+	defer progressStore.AssertExpectations(t)
+
+	key := makeKeyWithModel(t, "gemini-2.5-flash")
+	quotaErr := errors.New("quota_exhausted_rpd")
+	translated := turkishBlocks()
+
+	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
+	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
+	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
+	// First attempt uses the key's model; RPD hit exhausts it
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
+		key.KeyValue(), "gemini-2.5-flash", mock.Anything).Return(nil, quotaErr).Once()
+	// Fallback: first non-exhausted model from hardcoded priority ("gemini-3.1-flash-lite")
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
+		key.KeyValue(), "gemini-3.1-flash-lite", mock.Anything).Return(translated, nil).Once()
+	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), "gemini-3.1-flash-lite").Return(nil)
+	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
+	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
+	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
+
+	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
+	err := svc.Translate(context.Background(), engPath, "tr")
+
+	require.NoError(t, err)
+	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
+}
+
+// TestTranslationService_Translate_ModelPriorityLoadedFromSettings verifies that
+// the model priority stored in the settings repository overrides the hardcoded
+// default, so the first model from DB is used as fallback when key model is absent.
+func TestTranslationService_Translate_ModelPriorityLoadedFromSettings(t *testing.T) {
+	engPath := makeEngSRT(t, srtContent())
+	subtitle := makeSubtitleWithPath(t, engPath, valueobject.StatusQueued)
+
+	subRepo := &testmocks.MockSubtitleRepository{}
+	keyRepo := &testmocks.MockAPIKeyRepository{}
+	translator := &testmocks.MockTranslationProvider{}
+	progressStore := &testmocks.MockProgressStore{}
+	settingsRepo := &testmocks.MockAppSettingsRepository{}
+	defer subRepo.AssertExpectations(t)
+	defer keyRepo.AssertExpectations(t)
+	defer translator.AssertExpectations(t)
+	defer progressStore.AssertExpectations(t)
+
+	// Key has no model — resolveModel goes straight to priority list
+	key := makeKey(t)
+	key.SetModel("")
+	translated := turkishBlocks()
+
+	// DB priority puts "gemini-2.5-flash" first; hardcoded default starts with "gemini-3.1-flash-lite"
+	settingsRepo.On("GetSetting", mock.Anything, "model_priority").
+		Return(`["gemini-2.5-flash","gemini-3.1-flash-lite"]`, nil)
+	// loadExhaustedModels queries model_exhausted_* for each hardcoded model
+	for _, m := range []string{"gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-3-flash-preview"} {
+		settingsRepo.On("GetSetting", mock.Anything, "model_exhausted_"+m).Return("", nil)
+	}
+
+	keyRepo.On("ResetExpiredQuotas", mock.Anything).Return(nil)
+	subRepo.On("FindByPath", mock.Anything, engPath).Return(subtitle, nil)
+	progressStore.On("Load", mock.Anything, engPath).Return(nil, false, nil)
+	keyRepo.On("FindNextAvailable", mock.Anything, "gemini").Return(key, nil)
+	// Must use "gemini-2.5-flash" (first from DB priority), not "gemini-3.1-flash-lite" (hardcoded default first)
+	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"),
+		key.KeyValue(), "gemini-2.5-flash", mock.Anything).Return(translated, nil)
+	keyRepo.On("Save", mock.Anything, key).Return(nil)
+	keyRepo.On("IncrementModelUsage", mock.Anything, mock.AnythingOfType("int"), "gemini-2.5-flash").Return(nil)
+	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
+	progressStore.On("Clear", mock.Anything, engPath).Return(nil)
+	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
+
+	svc := newTranslateSvcWithSettings(subRepo, keyRepo, translator, progressStore, nil, settingsRepo)
+	err := svc.Translate(context.Background(), engPath, "tr")
+
+	require.NoError(t, err)
+	assert.Equal(t, valueobject.StatusDone, subtitle.Status())
 }
 
 func TestTranslationService_Translate_DefaultOtherError_SavesProgressAndReturns(t *testing.T) {
