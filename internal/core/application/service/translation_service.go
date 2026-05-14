@@ -176,8 +176,8 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 		lang = valueobject.DefaultLanguage()
 	}
 
-	s.loadExhaustedModels(ctx)
 	s.loadModelPriority(ctx)
+	s.loadExhaustedModels(ctx)
 
 	// Reset any RPD quotas that have passed their reset time before attempting translation.
 	_ = s.apiKeyRepo.ResetExpiredQuotas(ctx)
@@ -290,8 +290,7 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 				}
 				continue
 
-			case strings.Contains(errStr, "quota_exhausted_rpd"),
-				strings.Contains(errStr, "quota_exhausted"):
+			case strings.Contains(errStr, "quota_exhausted"):
 				logger.Warn("translate: RPD quota hit for %s [model=%s] — switching model", name, currentModel)
 				s.markModelExhausted(ctx, currentModel, time.Now().Add(24*time.Hour))
 				batchNum--
