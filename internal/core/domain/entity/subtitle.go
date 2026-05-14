@@ -97,6 +97,11 @@ func (s *Subtitle) IncrementRetry() {
 	s.updatedAt = now
 }
 
+func (s *Subtitle) ResetRetry() {
+	s.retryCount = 0
+	s.updatedAt = time.Now()
+}
+
 func (s *Subtitle) TransitionTo(newStatus valueobject.SubtitleStatus) error {
 	if s.status.CanTransitionTo(newStatus) {
 		s.status = newStatus

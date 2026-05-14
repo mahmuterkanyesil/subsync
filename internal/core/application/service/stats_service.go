@@ -147,7 +147,37 @@ func (s *StatsService) UpdateApiKeyModel(ctx context.Context, id int, model stri
 		return err
 	}
 	applyModel(key, model)
-	return s.apiKeyRepo.Save(ctx, key)
+	if err := s.apiKeyRepo.Save(ctx, key); err != nil {
+		return err
+	}
+	s.retriggerStuckSubtitles(ctx, []valueobject.SubtitleStatus{
+		valueobject.StatusError,
+		valueobject.StatusQuotaExhausted,
+	})
+	return nil
+}
+
+func (s *StatsService) retriggerStuckSubtitles(ctx context.Context, statuses []valueobject.SubtitleStatus) {
+	targetLang := s.GetTargetLanguage(ctx)
+	for _, status := range statuses {
+		subs, err := s.subtitleRepo.FindByStatus(ctx, status)
+		if err != nil {
+			continue
+		}
+		for _, sub := range subs {
+			if err := sub.TransitionTo(valueobject.StatusQueued); err != nil {
+				continue
+			}
+			sub.ResetRetry()
+			if err := s.subtitleRepo.Save(ctx, sub); err != nil {
+				continue
+			}
+			_ = s.taskQueue.Enqueue(ctx, "translate_srt", port.TranslateTask{
+				EngPath:        sub.EngPath(),
+				TargetLanguage: targetLang,
+			})
+		}
+	}
 }
 
 func (s *StatsService) DisableApiKey(ctx context.Context, id int) error {
