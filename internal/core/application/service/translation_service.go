@@ -190,6 +190,13 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 	if subtitle.Status() == valueobject.StatusDone {
 		return nil
 	}
+	// Retry attempt: normalize error/quota_exhausted back to queued in memory so
+	// that the queued→done transition is valid when translation eventually succeeds.
+	if st := subtitle.Status(); st == valueobject.StatusError || st == valueobject.StatusQuotaExhausted {
+		if err := subtitle.TransitionTo(valueobject.StatusQueued); err != nil {
+			return err
+		}
+	}
 
 	// If translated srt already exists, translation completed in a prior run but the
 	// DB save failed (e.g. SQLITE_BUSY). Recover by updating status only.
@@ -299,6 +306,9 @@ func (s *TranslationService) Translate(ctx context.Context, engPath, targetLang 
 			default:
 				logger.Error("translate error for %s: %v", name, err)
 				_ = s.progress.Save(ctx, engPath, translated)
+				subtitle.MarkError(err)
+				_ = subtitle.TransitionTo(valueobject.StatusError)
+				_ = s.subtitleRepo.Save(ctx, subtitle)
 				return err
 			}
 		}

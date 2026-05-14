@@ -579,10 +579,12 @@ func TestTranslationService_Translate_DefaultOtherError_SavesProgressAndReturns(
 	translator.On("TranslateBatch", mock.Anything, mock.AnythingOfType("[]valueobject.SRTBlock"), key.KeyValue(), mock.Anything, mock.Anything).
 		Return(nil, networkErr)
 	progressStore.On("Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock")).Return(nil)
+	subRepo.On("Save", mock.Anything, subtitle).Return(nil)
 
 	svc := newTranslateSvc(subRepo, keyRepo, translator, progressStore, nil)
 	err := svc.Translate(context.Background(), engPath, "tr")
 
 	assert.ErrorIs(t, err, networkErr)
+	assert.Equal(t, valueobject.StatusError, subtitle.Status())
 	progressStore.AssertCalled(t, "Save", mock.Anything, engPath, mock.AnythingOfType("[]valueobject.SRTBlock"))
 }
