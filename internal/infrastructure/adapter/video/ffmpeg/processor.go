@@ -23,9 +23,18 @@ const minSRTBlocks = 5
 
 var skipTitles = []string{"forced", "signs", "songs", "sdh"}
 
+// textSubtitleCodecs is the set of codecs that ffmpeg can decode to plain-text SRT.
+var textSubtitleCodecs = map[string]bool{
+	"subrip": true, "srt": true, "ass": true, "ssa": true,
+	"webvtt": true, "mov_text": true, "text": true,
+	"microdvd": true, "mpl2": true, "realtext": true,
+	"stl": true, "ttml": true, "sami": true,
+}
+
 type subtitleStream struct {
-	Index int
-	Tags  struct {
+	Index     int    `json:"index"`
+	CodecName string `json:"codec_name"`
+	Tags      struct {
 		Language string `json:"language"`
 		Title    string `json:"title"`
 	} `json:"tags"`
@@ -42,11 +51,15 @@ func NewFFmpegProcessor() *FFmpegProcessor {
 }
 
 // orderedStreamIndices returns subtitle stream indices in preference order:
-// English-tagged non-skip streams first, then all remaining non-skip streams.
-// Streams tagged forced/signs/songs/sdh are excluded entirely.
+// English-tagged non-skip text streams first, then all remaining non-skip text streams.
+// Bitmap codecs (PGS, VOBSUB, etc.) and streams tagged forced/signs/songs/sdh are excluded.
 func orderedStreamIndices(streams []subtitleStream) []int {
 	var eng, other []int
 	for i, s := range streams {
+		codec := strings.ToLower(s.CodecName)
+		if codec != "" && !textSubtitleCodecs[codec] {
+			continue
+		}
 		title := strings.ToLower(s.Tags.Title)
 		skip := false
 		for _, bad := range skipTitles {
